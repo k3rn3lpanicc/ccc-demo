@@ -7,21 +7,12 @@ from umbral import SecretKey, PublicKey, decrypt_reencrypted, decrypt_original, 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 STATE_FILE = "./kd/umbral_state.json"
-TEE_KEY_FILE = "./tee_secret_key.json"
 
 app = FastAPI()
 
 # Load or generate TEE's secret key
-if os.path.exists(TEE_KEY_FILE):
-    with open(TEE_KEY_FILE, "r") as f:
-        key_data = json.load(f)
-        secret_key = SecretKey.from_bytes(base64.b64decode(key_data["secret_key"]))
-    print("Loaded existing TEE secret key")
-else:
-    secret_key = SecretKey.random()
-    with open(TEE_KEY_FILE, "w") as f:
-        json.dump({"secret_key": base64.b64encode(secret_key.to_secret_bytes()).decode("utf-8")}, f)
-    print("Generated new TEE secret key")
+secret_key = SecretKey.random()
+print("Generated new TEE secret key")
 
 print("TEE Public Key: " + base64.b64encode(secret_key.public_key().__bytes__()).decode("utf-8"))
 
