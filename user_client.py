@@ -63,10 +63,10 @@ def main():
     encrypted_sym_key_b64 = b64e(encrypted_sym_key)
     sym_ciphertext_b64 = b64e(sym_ciphertext)
 
-    # Call any node's /decrypt endpoint (let's use port 5000)
-    NODE_URL = "http://127.0.0.1:5000/submit"
+    # Call any node's /submit_vote endpoint (let's use port 5000)
+    NODE_URL = "http://127.0.0.1:5000/submit_vote"
     
-    print("\nCalling node's /decrypt endpoint...")
+    print("\nCalling node's /submit_vote endpoint...")
     print("The node will collect cfrags from all nodes and forward to TEE...")
     
     try:

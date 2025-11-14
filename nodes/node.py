@@ -142,10 +142,10 @@ def decrypt_via_tee(data: UserDecryptRequest):
                 "error": f"Not enough valid cFrags. Needed {threshold}, got {len(cfrag_b64_list)}."
             }
         
-        # Call TEE's /decrypt endpoint
-        TEE_URL = "http://127.0.0.1:8000/decrypt"
+        # Call TEE's /submit endpoint
+        TEE_URL = "http://127.0.0.1:8000/submit"
         
-        print("\nCalling TEE's /decrypt endpoint...")
+        print("\nCalling TEE's /submit endpoint...")
         try:
             resp = requests.post(
                 TEE_URL,
