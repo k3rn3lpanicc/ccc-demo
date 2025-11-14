@@ -71,7 +71,7 @@ def main():
         balance = w3.from_wei(w3.eth.get_balance(acc), 'ether')
         print(f"  {i}. {acc} ({balance:.2f} ETH)")
     
-    choice = input("\nSelect account (1-5): ")
+    choice = input("\nSelect account (1-8): ")
     try:
         voter_index = int(choice)
         voter = accounts[voter_index]
