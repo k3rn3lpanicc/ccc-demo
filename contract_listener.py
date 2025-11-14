@@ -65,8 +65,7 @@ def process_vote_event(event, contract, w3):
         if result.get("success"):
             new_state = result.get("new_encrypted_state")
             print("✅ Vote processed successfully!")
-            print(f"Vote info: {result.get('vote_processed')}")
-            
+            print(f" New a_ratio: {result.get('a_ratio')}")
             # Update contract state
             print("\n📝 Updating contract state...")
             
@@ -131,11 +130,24 @@ def main():
     
     # Track processed events
     processed_tx_hashes = set()
-    last_block = w3.eth.block_number
+    
+    # Check if we should process past events
+    process_past = input("Process past events from block 0? (y/n): ").lower() == 'y'
+    
+    if process_past:
+        last_block = 0
+        print("   Will process events from genesis block")
+    else:
+        last_block = w3.eth.block_number
+        print(f"   Starting from current block: {last_block}")
     
     try:
         while True:
             current_block = w3.eth.block_number
+            
+            # Debug output every 10 seconds
+            if int(time.time()) % 10 == 0:
+                print(f"   Polling... (last: {last_block}, current: {current_block})")
             
             if current_block > last_block:
                 # Check for new events
@@ -153,13 +165,16 @@ def main():
                             process_vote_event(event, contract, w3)
                             processed_tx_hashes.add(tx_hash)
                 except Exception as e:
+                    print(f"⚠️  Filter API not available, using block scanning: {e}")
                     # Fallback: scan blocks manually
                     try:
                         for block_num in range(last_block + 1, current_block + 1):
+                            print(f"   Scanning block {block_num}...")
                             block = w3.eth.get_block(block_num, full_transactions=True)
                             for tx in block['transactions']:
                                 if tx['to'] and tx['to'].lower() == contract.address.lower():
                                     receipt = w3.eth.get_transaction_receipt(tx['hash'])
+                                    print(f"   Found transaction to contract: {tx['hash'].hex()[:10]}...")
                                     # Process logs from the receipt
                                     for log in receipt['logs']:
                                         if log['address'].lower() == contract.address.lower():
@@ -169,10 +184,10 @@ def main():
                                                 if tx_hash not in processed_tx_hashes:
                                                     process_vote_event(event, contract, w3)
                                                     processed_tx_hashes.add(tx_hash)
-                                            except:
-                                                pass
+                                            except Exception as e3:
+                                                print(f"   Could not process log: {e3}")
                     except Exception as e2:
-                        print(f"Error scanning blocks: {e2}")
+                        print(f"❌ Error scanning blocks: {e2}")
                 
                 last_block = current_block
             

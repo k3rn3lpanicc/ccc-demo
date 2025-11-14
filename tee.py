@@ -218,7 +218,7 @@ def process_vote(data: SubmitVoteRequest):
         return {
             "success": True,
             "new_encrypted_state": new_encrypted_state,
-            "vote_processed": vote_info
+            "a_ratio": current_state["a_ratio"],
         }
     except Exception as e:
         print(f"Vote processing failed: {e}")
