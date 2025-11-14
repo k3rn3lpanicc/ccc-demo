@@ -26,7 +26,7 @@ def main():
     ( master_public_key, authority_public_key, bobs_secret_key, threshold, ) = load_state() 
     bobs_public_key = bobs_secret_key.public_key() 
 
-    plaintext = b"Proxy Re-Encryption is cool!" 
+    plaintext = "a"*10000000 .encode("utf-8") 
     capsule, ciphertext = encrypt(master_public_key, plaintext) 
     print("Original plaintext:", plaintext) 
 
