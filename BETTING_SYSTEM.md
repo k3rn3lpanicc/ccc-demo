@@ -201,6 +201,8 @@ This decrypts and displays the current betting state using the TEE's private key
 
 ## Testing Scenario
 
+### Manual Testing
+
 ```bash
 # Terminal 1: Start TEE
 python tee.py
@@ -214,7 +216,22 @@ python initialize_betting.py
 python cast_vote.py  # Vote A
 python cast_vote.py  # Vote B
 python view_state.py  # Check results
+python finish_betting.py  # Calculate payouts
 ```
+
+### Automated Testing
+
+```bash
+# Run complete flow test
+python test_betting_flow.py
+```
+
+This will:
+1. Initialize empty state
+2. Cast 5 votes (3 for A, 2 for B)
+3. Ask you to choose winner
+4. Calculate and display payouts
+5. Save payouts to payouts.json
 
 ## Production Integration
 
@@ -228,6 +245,46 @@ In production:
 6. Add betting periods/deadlines
 7. Add payout calculation after betting closes
 
+## Payout Calculation
+
+When betting finishes:
+
+1. **Winners Split the Pool**: Winners receive payouts proportional to their bets
+   - If Alice bet 100 on A and Bob bet 200 on A (total 300)
+   - And total pool is 500
+   - Alice gets: (100/300) × 500 = 166.67
+   - Bob gets: (200/300) × 500 = 333.33
+
+2. **Losers Get Nothing**: Those who bet on the losing option receive 0
+
+3. **Edge Case**: If no one bet on the winning option, everyone gets their money back
+
+### Example
+
+```
+Initial bets:
+- Alice: 100 on A
+- Bob: 200 on A  
+- Charlie: 150 on B
+- Dave: 50 on B
+
+Total pool: 500
+A total: 300
+B total: 200
+
+If A wins:
+- Alice: (100/300) × 500 = 166
+- Bob: (200/300) × 500 = 333
+- Charlie: 0
+- Dave: 0
+
+If B wins:
+- Alice: 0
+- Bob: 0
+- Charlie: (150/200) × 500 = 375
+- Dave: (50/200) × 500 = 125
+```
+
 ## Notes
 
 - Each wallet can only vote once (enforced by TEE)
@@ -235,3 +292,5 @@ In production:
 - TEE never stores symmetric keys permanently
 - Nodes cannot decrypt or see vote contents
 - System continues to work even if 3 nodes fail (threshold = 4/7)
+- Payout calculation happens in TEE - results are public (unencrypted)
+- Smart contract can use payout list to allow withdrawals

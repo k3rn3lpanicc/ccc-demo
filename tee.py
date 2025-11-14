@@ -228,3 +228,111 @@ def process_vote(data: SubmitVoteRequest):
             "success": False,
             "error": str(e)
         }
+
+class FinishBettingRequest(BaseModel):
+    current_state: str  # Current encrypted state from contract
+    winning_option: str  # "A" or "B"
+
+@app.post("/finish")
+def finish_betting(data: FinishBettingRequest):
+    """
+    Finish the betting and calculate payouts:
+    1. Decrypt the current state
+    2. Determine winners and losers based on winning_option
+    3. Calculate new balances for each wallet
+    4. Return the payout list (unencrypted for smart contract)
+    
+    Payout logic:
+    - Winners split the total pool proportionally to their bets
+    - Losers get 0
+    """
+    try:
+        # Validate winning option
+        if data.winning_option not in ["A", "B"]:
+            return {
+                "success": False,
+                "error": "winning_option must be 'A' or 'B'"
+            }
+        
+        # Decrypt current state from contract
+        try:
+            current_state, _ = decrypt_contract_state(data.current_state)
+            print("Current state:", current_state)
+        except Exception as state_error:
+            print(f"Failed to decrypt contract state: {state_error}")
+            raise ValueError(f"Failed to decrypt contract state: {state_error}")
+        
+        votes = current_state.get("votes", {})
+        
+        if not votes:
+            return {
+                "success": False,
+                "error": "No votes found in the state"
+            }
+        
+        # Calculate total pool and separate winners/losers
+        total_pool = 0
+        winners = {}
+        losers = {}
+        
+        for wallet, vote_info in votes.items():
+            bet_amount = vote_info["bet_amount"]
+            bet_on = vote_info["bet_on"]
+            total_pool += bet_amount
+            
+            if bet_on == data.winning_option:
+                winners[wallet] = bet_amount
+            else:
+                losers[wallet] = bet_amount
+        
+        print(f"Total pool: {total_pool}")
+        print(f"Winners: {len(winners)}")
+        print(f"Losers: {len(losers)}")
+        
+        # Calculate payouts
+        payouts = {}
+        
+        if not winners:
+            # No winners - everyone gets their money back (edge case)
+            for wallet, bet_amount in votes.items():
+                payouts[wallet] = bet_amount
+        else:
+            # Winners split the total pool proportionally
+            total_winner_bets = sum(winners.values())
+            
+            for wallet, bet_amount in winners.items():
+                # Winner's share = (their bet / total winner bets) * total pool
+                payout = int((bet_amount / total_winner_bets) * total_pool)
+                payouts[wallet] = payout
+            
+            # Losers get nothing
+            for wallet in losers:
+                payouts[wallet] = 0
+        
+        # Format the result as a list for easy smart contract integration
+        payout_list = [
+            {
+                "wallet": wallet,
+                "payout": amount
+            }
+            for wallet, amount in payouts.items()
+        ]
+        
+        print("Calculated payouts:", payout_list)
+        
+        return {
+            "success": True,
+            "winning_option": data.winning_option,
+            "total_pool": total_pool,
+            "total_winners": len(winners),
+            "total_losers": len(losers),
+            "payouts": payout_list
+        }
+    except Exception as e:
+        print(f"Finish betting failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e)
+        }

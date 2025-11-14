@@ -1,0 +1,22 @@
+[
+  {
+    "wallet": "0xCharlie",
+    "payout": 600
+  },
+  {
+    "wallet": "0xDave",
+    "payout": 200
+  },
+  {
+    "wallet": "0xAlice",
+    "payout": 0
+  },
+  {
+    "wallet": "0xBob",
+    "payout": 0
+  },
+  {
+    "wallet": "0xEve",
+    "payout": 0
+  }
+]
