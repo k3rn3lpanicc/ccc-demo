@@ -92,8 +92,16 @@ def main():
     
     # Create vote data
     wallet_address = voter
-    bet_amount = 100
-    bet_on = input("\nBet on (A/B): ").upper()
+    
+    # Get bet amount in ETH
+    bet_eth = input("\nBet amount in ETH (e.g., 0.1): ")
+    try:
+        bet_amount_wei = w3.to_wei(float(bet_eth), 'ether')
+    except:
+        print("Invalid amount, using 0.1 ETH")
+        bet_amount_wei = w3.to_wei(0.1, 'ether')
+    
+    bet_on = input("Bet on (A/B): ").upper()
     
     if bet_on not in ["A", "B"]:
         print("❌ Invalid choice")
@@ -101,12 +109,12 @@ def main():
     
     vote_data = {
         wallet_address: {
-            "bet_amount": bet_amount,
+            "bet_amount": bet_amount_wei,  # Amount in wei
             "bet_on": bet_on
         }
     }
     
-    print(f"\n📝 Creating vote: {bet_amount} on {bet_on}")
+    print(f"\n📝 Creating vote: {w3.from_wei(bet_amount_wei, 'ether')} ETH on {bet_on}")
     
     # Encrypt vote with AES
     master_public_key = load_master_key()
@@ -123,9 +131,6 @@ def main():
     capsule_b64 = b64e(bytes(capsule))
     
     print("✅ Vote encrypted")
-    
-    # Submit to contract
-    bet_amount_wei = w3.to_wei(0.1, 'ether')  # 0.1 ETH bet
     
     print(f"\n📤 Submitting to contract with {w3.from_wei(bet_amount_wei, 'ether')} ETH...")
     
