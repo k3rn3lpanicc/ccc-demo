@@ -5,6 +5,7 @@ A privacy-preserving betting system that uses threshold encryption and mock Trus
 ## 🎯 What is This?
 
 This is a proof-of-concept betting platform where:
+
 - **Users vote privately** on options A or B with ETH stakes
 - **Individual votes remain encrypted** throughout the voting period
 - **Vote distribution is revealed periodically** (every 5 votes) to prevent identification
@@ -50,6 +51,7 @@ User Vote → Smart Contract → Event Listener → Nodes (Threshold Re-encrypti
 ### Encryption Flow
 
 #### Vote Submission
+
 ```
 1. User creates vote: {address, bet_amount, bet_on: "A"/"B"}
 2. Generate random symmetric key (AES-256)
@@ -59,6 +61,7 @@ User Vote → Smart Contract → Event Listener → Nodes (Threshold Re-encrypti
 ```
 
 #### Vote Processing
+
 ```
 1. Contract emits VoteSubmitted event
 2. Listener detects event
@@ -79,11 +82,13 @@ User Vote → Smart Contract → Event Listener → Nodes (Threshold Re-encrypti
 ```
 
 #### Privacy Protection
+
 - **A-ratio** (percentage voting for A) is only revealed when `total_votes % 5 == 0`
 - This prevents identifying individual votes from ratio changes
 - Provides batch transparency while maintaining voter privacy
 
 #### Settlement
+
 ```
 1. Admin calls finishBetting() → no more votes accepted
 2. Admin calls TEE /finish endpoint with winning option
@@ -97,16 +102,19 @@ User Vote → Smart Contract → Event Listener → Nodes (Threshold Re-encrypti
 ## 📋 Prerequisites
 
 ### Software Requirements
+
 - **Python 3.12+** with pip
 - **Node.js 16+** with npm
 - **Git**
 
 ### Python Dependencies
+
 ```bash
 pip install fastapi uvicorn web3 cryptography umbral-pre requests
 ```
 
 ### Node.js Dependencies
+
 ```bash
 npm install
 ```
@@ -120,6 +128,7 @@ python -m uvicorn tee:app
 ```
 
 **Expected Output:**
+
 ```
 Generated new TEE secret key
 TEE Public Key: AzXtAf1xt7gAv8IMcXHWjkUYt0M8SfNrqD7ykWu5HWpg
@@ -129,6 +138,7 @@ INFO:     Uvicorn running on http://127.0.0.1:8000
 **⚠️ IMPORTANT**: Copy the TEE Public Key for the next step.
 
 **About the TEE:**
+
 - This is a **mock TEE** implemented as a simple FastAPI service
 - In production, this would run in a hardware-isolated Trusted Execution Environment (Intel SGX, AMD SEV, ARM TrustZone)
 - The TEE generates a random secret key on startup
@@ -142,11 +152,13 @@ python kd.py
 ```
 
 **Prompts:**
+
 ```
 Enter TEE public key (Bob's public key): <paste the key from Step 1>
 ```
 
 **What this does:**
+
 - Generates a **master key pair** for encrypting votes
 - Creates an **authority key pair** for generating kfrags
 - Splits the decryption capability into **7 kfrags** (key fragments)
@@ -154,6 +166,7 @@ Enter TEE public key (Bob's public key): <paste the key from Step 1>
 - Saves everything to `kd/umbral_state.json`
 
 **Output:**
+
 ```json
 {
   "master_public_key": "...",
@@ -173,12 +186,14 @@ python run_nodes.py
 ```
 
 **What this does:**
+
 - Starts 7 Flask servers on ports 5000-5006
 - Each node receives one kfrag (key fragment)
 - **Randomly marks 2 nodes as corrupt/malicious**
 - Nodes provide re-encryption services
 
 **Expected Output:**
+
 ```
 Starting 7 Umbral nodes...
 Node 0 running on http://127.0.0.1:5000 [Honest]
@@ -194,6 +209,7 @@ Corrupt nodes may refuse to cooperate, but system remains secure!
 ```
 
 **Byzantine Fault Tolerance:**
+
 - System works even if 3 nodes are down/corrupt
 - Only need 4 honest nodes out of 7
 
@@ -205,6 +221,7 @@ npm run node
 ```
 
 **What this does:**
+
 - Starts Hardhat local Ethereum network
 - Provides 20 test accounts with 10,000 ETH each
 - Network runs on `http://127.0.0.1:8545`
@@ -220,6 +237,7 @@ npx hardhat run scripts/deploy-with-tee.js --network localhost
 ```
 
 **What this does:**
+
 1. Calls TEE's `/initialize_state` endpoint
 2. Gets empty encrypted state
 3. Deploys `PrivateBetting.sol` contract
@@ -227,6 +245,7 @@ npx hardhat run scripts/deploy-with-tee.js --network localhost
 5. Saves contract address to `contract-address.json`
 
 **Expected Output:**
+
 ```
 Deploying PrivateBetting contract with TEE initialization...
 
@@ -250,6 +269,7 @@ python contract_listener.py
 ```
 
 **What this does:**
+
 - Connects to local Ethereum network
 - Listens for `VoteSubmitted` events from the contract
 - When a vote is detected:
@@ -263,6 +283,7 @@ python contract_listener.py
 - Displays a_ratio when `total_votes % 5 == 0` (if revealed by TEE)
 
 **Expected Output:**
+
 ```
 ============================================================
 SMART CONTRACT EVENT LISTENER
@@ -292,6 +313,7 @@ python submit_vote_to_contract.py
 ```
 
 **Interactive prompts:**
+
 ```
 Available accounts:
   1. 0x70997970...dc79C8 (10000.00 ETH)
@@ -318,6 +340,7 @@ Bet on (A/B): A
 ```
 
 **What happens:**
+
 1. Vote is encrypted with AES-GCM using random symmetric key
 2. Symmetric key is encrypted with master public key (Umbral)
 3. Transaction sent to contract with 0.1 ETH
@@ -325,6 +348,7 @@ Bet on (A/B): A
 5. **Listener processes automatically** (check listener terminal)
 
 **Listener output:**
+
 ```
 ============================================================
 📥 New Vote Event Detected!
@@ -346,12 +370,14 @@ Total votes: 1
 ```
 
 **Privacy Feature:**
+
 - Votes 1-4: A-ratio hidden
 - Vote 5: A-ratio revealed (e.g., 60.00%)
 - Votes 6-9: Hidden again
 - Vote 10: Revealed (e.g., 55.00%)
 
 **Submit multiple votes:**
+
 ```bash
 # Run multiple times with different accounts
 python submit_vote_to_contract.py  # Account 2, 0.2 ETH, B
@@ -361,6 +387,7 @@ python submit_vote_to_contract.py  # Account 5, 0.05 ETH, A
 ```
 
 **After 5th vote:**
+
 ```
 📊 A-ratio revealed: 60.00%
 ```
@@ -442,11 +469,13 @@ Contract balance: 0.75 ETH
 ```
 
 **Payout Calculation:**
+
 - Winners split the total pool proportionally to their stakes
 - Formula: `payout = (your_stake / total_winner_stakes) × total_pool`
 - Losers get 0
 
 **Example:**
+
 ```
 Total pool: 0.75 ETH
 Winners (voted A):
@@ -504,6 +533,7 @@ Claim payout? (y/n): y
 ```
 
 **Run again for other winners:**
+
 ```bash
 python claim_payout.py  # Claim for account 2
 python claim_payout.py  # Claim for account 3
@@ -538,6 +568,7 @@ private-market-prediction/
 ## 🔒 Security Considerations
 
 ### Current Implementation (Development)
+
 - ✅ Threshold encryption protects against node compromise
 - ✅ Forward secrecy prevents historical decryption
 - ✅ Byzantine fault tolerance (handles 3 corrupt nodes)
@@ -548,6 +579,7 @@ private-market-prediction/
 - ⚠️  Local development network (no real stakes)
 
 ### Production Requirements
+
 1. **Hardware TEE**
    - Intel SGX, AMD SEV, or ARM TrustZone
    - Remote attestation for verification
@@ -577,6 +609,7 @@ private-market-prediction/
 ## 🧪 Testing
 
 ### Unit Tests
+
 ```bash
 # Test smart contract
 npx hardhat test
@@ -586,9 +619,11 @@ npx hardhat run scripts/test-contract.js --network localhost
 ```
 
 ### Integration Test
+
 The complete flow from setup to claim is an integration test itself. Follow the usage steps above.
 
 ### What to Expect
+
 - ✅ Votes submitted successfully
 - ✅ Listener processes votes automatically
 - ✅ A-ratio revealed every 5 votes
@@ -600,6 +635,7 @@ The complete flow from setup to claim is an integration test itself. Follow the 
 ## 🎓 Educational Purpose
 
 This project demonstrates:
+
 - **Threshold Cryptography**: Splitting trust among multiple parties
 - **Proxy Re-encryption**: Umbral's approach to re-encryption
 - **TEE Concepts**: Even if mocked, shows the role of trusted computing
@@ -619,16 +655,19 @@ This project demonstrates:
 ## 📚 Technical References
 
 ### Cryptography
+
 - **Umbral**: [Proxy re-encryption library](https://github.com/nucypher/nucypher)
 - **AES-GCM**: Authenticated encryption with associated data
 - **Threshold Cryptography**: [Shamir's Secret Sharing](https://en.wikipedia.org/wiki/Shamir%27s_Secret_Sharing)
 
 ### Trusted Execution
+
 - **Intel SGX**: [Software Guard Extensions](https://www.intel.com/content/www/us/en/developer/tools/software-guard-extensions/overview.html)
 - **AMD SEV**: [Secure Encrypted Virtualization](https://www.amd.com/en/developer/sev.html)
 - **ARM TrustZone**: [ARM Trusted Execution](https://www.arm.com/technologies/trustzone-for-cortex-a)
 
 ### Smart Contracts
+
 - **Solidity**: [Ethereum smart contract language](https://docs.soliditylang.org/)
 - **Hardhat**: [Ethereum development environment](https://hardhat.org/)
 - **Web3.py**: [Python Ethereum library](https://web3py.readthedocs.io/)
@@ -636,14 +675,11 @@ This project demonstrates:
 ## 🤝 Contributing
 
 This is an educational project. If you find issues or have improvements:
+
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
 4. Submit a pull request
-
-## 📄 License
-
-ISC License - see LICENSE file for details
 
 ## 👤 Author
 
