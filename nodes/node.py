@@ -62,13 +62,14 @@ def reencryptData(data: ReencryptRequest):
         "cFrag": base64.b64encode(cfrag.__bytes__()).decode()
     }
 
-class UserDecryptRequest(BaseModel):
-    encrypted_text: str
+class UserSubmitVoteRequest(BaseModel):
+    encrypted_vote: str
     encrypted_sym_key: str
     capsule: str
+    current_state: str  # Current encrypted state from contract
 
 @app.post("/submit_vote")
-def decrypt_via_tee(data: UserDecryptRequest):
+def submit_vote_via_tee(data: UserSubmitVoteRequest):
     try:
         master_public_key, authority_public_key, bobs_public_key, threshold = load_state()
         
@@ -150,10 +151,11 @@ def decrypt_via_tee(data: UserDecryptRequest):
             resp = requests.post(
                 TEE_URL,
                 json={
-                    "encrypted_text": data.encrypted_text,
+                    "encrypted_vote": data.encrypted_vote,
                     "encrypted_sym_key": encrypted_sym_key_b64,
                     "capsule": capsule_b64,
                     "cfrags": cfrag_b64_list,
+                    "current_state": data.current_state,
                 },
                 timeout=10,
             )

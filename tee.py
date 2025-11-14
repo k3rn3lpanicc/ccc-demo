@@ -3,23 +3,33 @@ import os
 import json
 from fastapi import FastAPI
 from pydantic import BaseModel
-from umbral import SecretKey, PublicKey, decrypt_reencrypted, Capsule, VerifiedCapsuleFrag
+from umbral import SecretKey, PublicKey, decrypt_reencrypted, decrypt_original, Capsule, VerifiedCapsuleFrag, encrypt
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-class VoteState:
-    def __init__(self):
-        self.votes = {}
-
-
 STATE_FILE = "./kd/umbral_state.json"
+TEE_KEY_FILE = "./tee_secret_key.json"
 
 app = FastAPI()
 
-secret_key = SecretKey.random()
+# Load or generate TEE's secret key
+if os.path.exists(TEE_KEY_FILE):
+    with open(TEE_KEY_FILE, "r") as f:
+        key_data = json.load(f)
+        secret_key = SecretKey.from_bytes(base64.b64decode(key_data["secret_key"]))
+    print("Loaded existing TEE secret key")
+else:
+    secret_key = SecretKey.random()
+    with open(TEE_KEY_FILE, "w") as f:
+        json.dump({"secret_key": base64.b64encode(secret_key.to_secret_bytes()).decode("utf-8")}, f)
+    print("Generated new TEE secret key")
+
 print("TEE Public Key: " + base64.b64encode(secret_key.public_key().__bytes__()).decode("utf-8"))
 
 def b64d(s: str) -> bytes:
     return base64.b64decode(s.encode("utf-8"))
+
+def b64e(b: bytes) -> str:
+    return base64.b64encode(b).decode("utf-8")
 
 def load_state():
     if not os.path.exists(STATE_FILE):
@@ -34,26 +44,116 @@ def load_state():
 
     return master_public_key
 
+def aes_encrypt(key: bytes, plaintext: bytes, aad: bytes | None = None):
+    aesgcm = AESGCM(key)
+    nonce = os.urandom(12)
+    ct = aesgcm.encrypt(nonce, plaintext, aad)
+    return nonce, ct
+
 def aes_decrypt(key: bytes, nonce: bytes, ciphertext: bytes, aad: bytes | None = None):
     aesgcm = AESGCM(key)
     return aesgcm.decrypt(nonce, ciphertext, aad)
 
-def decryptData(ciphertext: bytes) -> bytes:
-    plaintext = secret_key.decrypt(ciphertext)
-    return plaintext
+def decrypt_contract_state(encrypted_state_with_key: str) -> tuple[dict, bytes]:
+    """
+    Decrypt contract state using TEE's private key to get the symmetric key,
+    then use that to decrypt the state.
+    Returns: (state_dict, symmetric_key)
+    """
+    encrypted_bytes = b64d(encrypted_state_with_key)
+    
+    # Format: capsule (98 bytes) + ciphertext (variable) + AES-GCM encrypted state
+    # Umbral ciphertext for 44 bytes (32 key + 12 nonce) = 84 bytes
+    capsule_size = 98
+    ciphertext_size = 84
+    
+    capsule_bytes = encrypted_bytes[:capsule_size]
+    encrypted_sym_key = encrypted_bytes[capsule_size:capsule_size + ciphertext_size]
+    aes_ciphertext = encrypted_bytes[capsule_size + ciphertext_size:]
+    
+    # Decrypt the symmetric key using TEE's private key (Umbral decryption)
+    capsule = Capsule.from_bytes(capsule_bytes)
+    sym_key_with_nonce = decrypt_original(secret_key, capsule, encrypted_sym_key)
+    
+    sym_key = sym_key_with_nonce[:32]
+    nonce = sym_key_with_nonce[32:]
+    
+    # Decrypt the state using AES-GCM
+    state_json = aes_decrypt(sym_key, nonce, aes_ciphertext)
+    state = json.loads(state_json.decode("utf-8"))
+    
+    return state, sym_key
 
-class DecryptRequest(BaseModel):
-    encrypted_text: str
+def encrypt_contract_state(state: dict) -> str:
+    """
+    Encrypt state with a new symmetric key and encrypt that key with TEE's public key.
+    Returns: base64 encoded (capsule + encrypted_key + encrypted_state)
+    """
+    # Generate new symmetric key
+    new_sym_key = os.urandom(32)
+    
+    # Encrypt the state with AES-GCM
+    state_json = json.dumps(state).encode("utf-8")
+    nonce, encrypted_state = aes_encrypt(new_sym_key, state_json)
+    
+    # Encrypt the symmetric key with TEE's public key (Umbral)
+    tee_public_key = secret_key.public_key()
+    capsule, encrypted_sym_key = encrypt(tee_public_key, new_sym_key + nonce)
+    
+    # Concatenate capsule + encrypted_key + encrypted_state
+    result = bytes(capsule) + encrypted_sym_key + encrypted_state
+    
+    return b64e(result)
+
+@app.get("/initialize_state")
+def initialize_empty_state():
+    """
+    Initialize empty betting state and encrypt it with TEE's public key.
+    Returns encrypted state to be stored in smart contract.
+    """
+    try:
+        empty_state = {
+            "a_ratio": None,
+            "votes": {}
+        }
+        
+        encrypted_state = encrypt_contract_state(empty_state)
+        
+        print("Initialized empty state")
+        
+        return {
+            "success": True,
+            "encrypted_state": encrypted_state
+        }
+    except Exception as e:
+        print(f"Initialization failed: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+class SubmitVoteRequest(BaseModel):
+    encrypted_vote: str  # Threshold-encrypted vote data
     encrypted_sym_key: str
     capsule: str
     cfrags: list[str]
+    current_state: str  # Current encrypted state from contract
 
 @app.post("/submit")
-def decrypt_and_print(data: DecryptRequest):
+def process_vote(data: SubmitVoteRequest):
+    """
+    Process a vote:
+    1. Decrypt the vote using threshold encryption
+    2. Decrypt the current state
+    3. Apply the vote to the state
+    4. Re-encrypt the state with a new key
+    5. Return the new encrypted state
+    """
     try:
         master_public_key = load_state()
         
-        sym_ciphertext = b64d(data.encrypted_text)
+        # Decrypt the vote using threshold encryption
+        vote_ciphertext = b64d(data.encrypted_vote)
         encrypted_sym_key = b64d(data.encrypted_sym_key)
         capsule = Capsule.from_bytes(b64d(data.capsule))
         
@@ -74,21 +174,56 @@ def decrypt_and_print(data: DecryptRequest):
         sym_key = recovered_sym_key[:32]
         nonce = recovered_sym_key[32:]
         
-        decrypted_plaintext = aes_decrypt(sym_key, nonce, sym_ciphertext)
+        decrypted_vote = aes_decrypt(sym_key, nonce, vote_ciphertext)
+        vote_data = json.loads(decrypted_vote.decode("utf-8"))
         
+        print("Decrypted vote:", vote_data)
+        
+        # Decrypt current state from contract
         try:
-            result = json.loads(decrypted_plaintext.decode("utf-8"))
-        except:
-            result = decrypted_plaintext.decode("utf-8")
+            current_state, _ = decrypt_contract_state(data.current_state)
+            print("Current state:", current_state)
+        except Exception as state_error:
+            print(f"Failed to decrypt contract state: {state_error}")
+            print(f"State data length: {len(b64d(data.current_state))}")
+            raise ValueError(f"Failed to decrypt contract state. The state might have been encrypted with a different TEE key. Try running initialize_betting.py again.")
         
-        print("Decrypted plaintext:", result)
+        # Apply vote to state
+        wallet_address = list(vote_data.keys())[0]
+        vote_info = vote_data[wallet_address]
+        
+        if wallet_address in current_state["votes"]:
+            return {
+                "success": False,
+                "error": "Wallet already voted"
+            }
+        
+        # Add vote to state
+        current_state["votes"][wallet_address] = vote_info
+        
+        # Recalculate a_ratio
+        total_votes = len(current_state["votes"])
+        a_votes = sum(1 for v in current_state["votes"].values() if v["bet_on"] == "A")
+        
+        if total_votes > 0:
+            current_state["a_ratio"] = a_votes / total_votes
+        else:
+            current_state["a_ratio"] = None
+        
+        print("Updated state:", current_state)
+        
+        # Encrypt the new state with a new symmetric key
+        new_encrypted_state = encrypt_contract_state(current_state)
         
         return {
             "success": True,
-            "plaintext": result
+            "new_encrypted_state": new_encrypted_state,
+            "vote_processed": vote_info
         }
     except Exception as e:
-        print(f"Decryption failed: {e}")
+        print(f"Vote processing failed: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "success": False,
             "error": str(e)
