@@ -62,17 +62,20 @@ User Vote → Smart Contract → Event Listener → Nodes (Threshold Re-encrypti
 ```
 1. Contract emits VoteSubmitted event
 2. Listener detects event
-3. Listener calls all 7 nodes for cfrags (threshold re-encryption fragments)
-4. Nodes re-encrypt using their kfrags (key fragments)
-5. Listener forwards vote + cfrags to TEE
-6. TEE performs threshold decryption (needs 4+ cfrags)
-7. TEE decrypts symmetric key
-8. TEE decrypts vote with symmetric key
-9. TEE updates state (adds vote, recalculates a_ratio)
-10. TEE generates NEW symmetric key
-11. TEE encrypts new state with new key
-12. TEE encrypts new key with its own public key
-13. Listener updates contract with new encrypted state
+3. Listener forwards vote to ONE node (e.g., node at port 5000)
+4. That node collects cfrags from all other nodes (calls all 7 nodes)
+5. Nodes re-encrypt using their kfrags (key fragments)
+6. The coordinating node forwards vote + collected cfrags to TEE
+7. TEE performs threshold decryption (needs 4+ cfrags)
+8. TEE decrypts symmetric key
+9. TEE decrypts vote with symmetric key
+10. TEE updates state (adds vote, recalculates a_ratio)
+11. TEE generates NEW symmetric key
+12. TEE encrypts new state with new key
+13. TEE encrypts new key with its own public key
+14. TEE returns new encrypted state to node
+15. Node returns result to listener
+16. Listener updates contract with new encrypted state
 ```
 
 #### Privacy Protection
