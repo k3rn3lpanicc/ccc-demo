@@ -97,7 +97,7 @@ def main():
                 timeout=5,
             )
             resp.raise_for_status()
-        except Exception as e:
+        except Exception:
             continue
 
         data = resp.json()
