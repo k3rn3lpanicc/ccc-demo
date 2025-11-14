@@ -253,11 +253,14 @@ python contract_listener.py
 - Connects to local Ethereum network
 - Listens for `VoteSubmitted` events from the contract
 - When a vote is detected:
-  1. Collects cfrags from all 7 nodes
-  2. Forwards encrypted vote + cfrags to TEE
-  3. TEE decrypts and processes vote
-  4. Updates contract with new encrypted state
-- Displays a_ratio when `total_votes % 5 == 0`
+  1. Calls one node (port 5000) with the encrypted vote
+  2. Node handles everything:
+     - Collects cfrags from all 7 nodes (including itself)
+     - Forwards vote + cfrags to TEE
+     - TEE decrypts and processes vote
+     - Returns new encrypted state
+  3. Listener receives result and updates contract state
+- Displays a_ratio when `total_votes % 5 == 0` (if revealed by TEE)
 
 **Expected Output:**
 ```
@@ -330,7 +333,8 @@ Voter: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 Amount: 0.1 ETH
 Block: 6
 
-📤 Submitting to nodes for processing...
+📤 Submitting to node for processing...
+  (Node will collect cfrags from all nodes and forward to TEE)
 ✅ Vote processed successfully!
 Vote info: {'bet_amount': 100000000000000000, 'bet_on': 'A'}
 Total votes: 1
