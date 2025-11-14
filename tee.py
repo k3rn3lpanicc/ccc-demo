@@ -38,46 +38,39 @@ def decryptData(ciphertext: bytes) -> bytes:
     return plaintext
 
 class DecryptRequest(BaseModel):
-    encrypted_text: str  # base64 encoded AES-GCM ciphertext
-    encrypted_sym_key: str  # base64 encoded
-    capsule: str  # base64 encoded
-    cfrags: list[str]  # list of base64 encoded cfrags
+    encrypted_text: str
+    encrypted_sym_key: str
+    capsule: str
+    cfrags: list[str]
 
-@app.post("/decrypt")
+@app.post("/submit")
 def decrypt_and_print(data: DecryptRequest):
     try:
         master_public_key = load_state()
-        bobs_secret_key = secret_key  # Use TEE's own secret key
         
-        # Decode the inputs
         sym_ciphertext = b64d(data.encrypted_text)
         encrypted_sym_key = b64d(data.encrypted_sym_key)
         capsule = Capsule.from_bytes(b64d(data.capsule))
         
-        # Convert cfrags to VerifiedCapsuleFrag
         verified_cfrags = []
         for cfrag_b64 in data.cfrags:
             cfrag_bytes = b64d(cfrag_b64)
             verified_cfrag = VerifiedCapsuleFrag.from_verified_bytes(cfrag_bytes)
             verified_cfrags.append(verified_cfrag)
         
-        # Decrypt to get symmetric key + nonce
         recovered_sym_key = decrypt_reencrypted(
-            receiving_sk=bobs_secret_key,
+            receiving_sk=secret_key,
             delegating_pk=master_public_key,
             capsule=capsule,
             verified_cfrags=verified_cfrags,
             ciphertext=encrypted_sym_key,
         )
         
-        # Split into key and nonce
         sym_key = recovered_sym_key[:32]
         nonce = recovered_sym_key[32:]
         
-        # Decrypt the AES-GCM ciphertext
         decrypted_plaintext = aes_decrypt(sym_key, nonce, sym_ciphertext)
         
-        # Try to decode as JSON, otherwise return as string
         try:
             result = json.loads(decrypted_plaintext.decode("utf-8"))
         except:

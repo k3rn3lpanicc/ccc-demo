@@ -49,6 +49,7 @@ def main():
 
         env = os.environ.copy()
         env["KFRAG"] = kfrag_b64
+        env["NODE_PORT"] = str(port)
         if idx in corrupt_indexes:
             env["CORRUPTED"] = "1"
 
