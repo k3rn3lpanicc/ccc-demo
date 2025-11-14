@@ -215,11 +215,22 @@ def process_vote(data: SubmitVoteRequest):
         # Encrypt the new state with a new symmetric key
         new_encrypted_state = encrypt_contract_state(current_state)
         
-        return {
+        # Only reveal a_ratio if total votes is divisible by 5 (privacy protection)
+        response = {
             "success": True,
             "new_encrypted_state": new_encrypted_state,
-            "a_ratio": current_state["a_ratio"],
+            "vote_processed": vote_info,
+            "total_votes": total_votes
         }
+        
+        # Conditionally include a_ratio for privacy
+        if total_votes % 5 == 0:
+            response["a_ratio"] = current_state["a_ratio"]
+            print(f"🔓 Revealing a_ratio (total votes: {total_votes})")
+        else:
+            print(f"🔒 Hiding a_ratio for privacy (total votes: {total_votes})")
+        
+        return response
     except Exception as e:
         print(f"Vote processing failed: {e}")
         import traceback

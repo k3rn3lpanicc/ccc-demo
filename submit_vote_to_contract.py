@@ -8,7 +8,6 @@ from web3 import Web3
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from umbral import PublicKey, encrypt
 
-# Configuration
 RPC_URL = "http://127.0.0.1:8545"
 CONTRACT_ADDRESS_FILE = "contract-address.json"
 CONTRACT_ABI_FILE = "contract-abi.json"
@@ -41,7 +40,6 @@ def main():
     print("SUBMIT VOTE TO SMART CONTRACT")
     print("="*60)
     
-    # Connect to Ethereum
     w3 = Web3(Web3.HTTPProvider(RPC_URL))
     if not w3.is_connected():
         print("❌ Cannot connect to Ethereum node")
@@ -50,7 +48,6 @@ def main():
     print(f"✅ Connected to Ethereum node")
     print(f"   Chain ID: {w3.eth.chain_id}")
     
-    # Load contract
     with open(CONTRACT_ADDRESS_FILE, 'r') as f:
         contract_address = json.load(f)['address']
     
@@ -64,15 +61,13 @@ def main():
     
     print(f"✅ Contract loaded: {contract_address}")
     
-    # Get accounts
     accounts = w3.eth.accounts
     if len(accounts) < 2:
         print("❌ Not enough accounts")
         return
     
-    # Show available accounts
     print("\nAvailable accounts:")
-    for i, acc in enumerate(accounts[1:6], 1):  # Show first 5 non-admin accounts
+    for i, acc in enumerate(accounts[1:9], 1):
         balance = w3.from_wei(w3.eth.get_balance(acc), 'ether')
         print(f"  {i}. {acc} ({balance:.2f} ETH)")
     
@@ -85,15 +80,9 @@ def main():
         voter = accounts[1]
     
     print(f"\n   Selected voter: {voter}")
-    
-    # Get voter balance
     balance = w3.eth.get_balance(voter)
     print(f"   Balance: {w3.from_wei(balance, 'ether')} ETH")
-    
-    # Create vote data
-    wallet_address = voter
-    
-    # Get bet amount in ETH
+    wallet_address = voter    
     bet_eth = input("\nBet amount in ETH (e.g., 0.1): ")
     try:
         bet_amount_wei = w3.to_wei(float(bet_eth), 'ether')
@@ -109,29 +98,21 @@ def main():
     
     vote_data = {
         wallet_address: {
-            "bet_amount": bet_amount_wei,  # Amount in wei
+            "bet_amount": bet_amount_wei,
             "bet_on": bet_on
         }
     }
     
     print(f"\n📝 Creating vote: {w3.from_wei(bet_amount_wei, 'ether')} ETH on {bet_on}")
-    
-    # Encrypt vote with AES
     master_public_key = load_master_key()
     plaintext = json.dumps(vote_data).encode("utf-8")
     sym_key = os.urandom(32)
-    
-    nonce, sym_ciphertext = aes_encrypt(sym_key, plaintext)
-    
-    # Encrypt symmetric key with Umbral
+    nonce, sym_ciphertext = aes_encrypt(sym_key, plaintext)    
     capsule, encrypted_sym_key = encrypt(master_public_key, sym_key + nonce)
-    
     vote_ciphertext_b64 = b64e(sym_ciphertext)
     encrypted_sym_key_b64 = b64e(encrypted_sym_key)
     capsule_b64 = b64e(bytes(capsule))
-    
     print("✅ Vote encrypted")
-    
     print(f"\n📤 Submitting to contract with {w3.from_wei(bet_amount_wei, 'ether')} ETH...")
     
     try:

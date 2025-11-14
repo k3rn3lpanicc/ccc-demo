@@ -65,7 +65,19 @@ def process_vote_event(event, contract, w3):
         if result.get("success"):
             new_state = result.get("new_encrypted_state")
             print("✅ Vote processed successfully!")
-            print(f" New a_ratio: {result.get('a_ratio')}")
+            print(f"Vote info: {result.get('vote_processed')}")
+            print(f"Total votes: {result.get('total_votes', 'unknown')}")
+            
+            # Display a_ratio only if it was revealed (privacy protection)
+            if "a_ratio" in result:
+                a_ratio = result.get("a_ratio")
+                if a_ratio is not None:
+                    print(f"📊 A-ratio revealed: {a_ratio:.2%}")
+                else:
+                    print("📊 A-ratio: No votes yet")
+            else:
+                print("🔒 A-ratio hidden for privacy (revealed every 5 votes)")
+            
             # Update contract state
             print("\n📝 Updating contract state...")
             
