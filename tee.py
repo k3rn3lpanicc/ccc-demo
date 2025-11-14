@@ -6,6 +6,11 @@ from pydantic import BaseModel
 from umbral import SecretKey, PublicKey, decrypt_reencrypted, Capsule, VerifiedCapsuleFrag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+class VoteState:
+    def __init__(self):
+        self.votes = {}
+
+
 STATE_FILE = "./kd/umbral_state.json"
 
 app = FastAPI()

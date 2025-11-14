@@ -46,8 +46,10 @@ def aes_encrypt(key: bytes, plaintext: bytes, aad: bytes | None = None):
 def main():
     master_public_key = load_state()
 
-    # Create your message
-    message = {"message": "Hello from user! This message will be decrypted via nodes and TEE!"}
+    message = {
+        "0xbec8c184a8f55e6443b315361bac3bbb2280e8e8": 1,
+        "bet": 100
+    }
     plaintext = json.dumps(message).encode("utf-8")
     sym_key = os.urandom(32)
 
