@@ -23,11 +23,13 @@ def b64d(s: str) -> bytes:
 def save_state(
     master_secret_key: SecretKey,
     authority_signing_key: SecretKey,
+    bobs_public_key: PublicKey,
     kfrags: list[KeyFrag],
 ):
     data = {
         "master_public_key": b64e(master_secret_key.public_key().__bytes__()),
         "authority_public_key": b64e(authority_signing_key.public_key().__bytes__()),
+        "bobs_public_key": b64e(bobs_public_key.__bytes__()),
         "kfrags": [b64e(kfrag.__bytes__()) for kfrag in kfrags],
         "threshold": 4,
         "shares": 7,
@@ -60,4 +62,4 @@ kfrags = [
     for kfrag in raw_kfrags
 ]
 
-save_state(master_secret_key, authority_signing_key, kfrags)
+save_state(master_secret_key, authority_signing_key, bobs_public_key, kfrags)
