@@ -681,10 +681,4 @@ This is an educational project. If you find issues or have improvements:
 3. Make your changes
 4. Submit a pull request
 
-## 👤 Author
-
-Created as a demonstration of privacy-preserving smart contract systems.
-
----
-
 **Remember**: This is a mock implementation. In production, replace the TEE with actual hardware-isolated trusted execution and implement all security measures.
