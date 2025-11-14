@@ -2,7 +2,7 @@
 
 A privacy-preserving betting system that uses threshold encryption and mock Trusted Execution Environment (TEE) to enable confidential voting and transparent settlement on Ethereum.
 
-## 🎯 What is This?
+## What is This?
 
 This is a proof-of-concept betting platform where:
 
@@ -13,7 +13,7 @@ This is a proof-of-concept betting platform where:
 - **Smart contract holds funds** and enforces settlement rules
 - **Winners are paid proportionally** to their stakes
 
-## 🔐 Cryptographic Scheme
+## Cryptographic Scheme
 
 ### Architecture Overview
 
@@ -99,7 +99,7 @@ User Vote → Smart Contract → Event Listener → Nodes (Threshold Re-encrypti
 6. Winners call claimPayout() to withdraw their ETH
 ```
 
-## 📋 Prerequisites
+## Prerequisites
 
 ### Software Requirements
 
@@ -539,7 +539,7 @@ python claim_payout.py  # Claim for account 2
 python claim_payout.py  # Claim for account 3
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 private-market-prediction/
@@ -565,7 +565,7 @@ private-market-prediction/
 └── README.md                       # This file
 ```
 
-## 🔒 Security Considerations
+## Security Considerations
 
 ### Current Implementation (Development)
 
@@ -606,21 +606,14 @@ private-market-prediction/
    - Emergency pause mechanism
    - Upgrade mechanisms
 
-## 🧪 Testing
+## Testing
 
 ### Unit Tests
 
 ```bash
-# Test smart contract
-npx hardhat test
-
 # Test contract with mock data
 npx hardhat run scripts/test-contract.js --network localhost
 ```
-
-### Integration Test
-
-The complete flow from setup to claim is an integration test itself. Follow the usage steps above.
 
 ### What to Expect
 
@@ -631,17 +624,6 @@ The complete flow from setup to claim is an integration test itself. Follow the 
 - ✅ Winners can claim their proportional share
 - ✅ Losers get 0
 - ✅ Contract balance depletes as winners claim
-
-## 🎓 Educational Purpose
-
-This project demonstrates:
-
-- **Threshold Cryptography**: Splitting trust among multiple parties
-- **Proxy Re-encryption**: Umbral's approach to re-encryption
-- **TEE Concepts**: Even if mocked, shows the role of trusted computing
-- **Privacy Engineering**: Techniques for hiding individual actions
-- **Smart Contract Integration**: Bridging off-chain computation with on-chain settlement
-- **Event-Driven Architecture**: Reactive systems with blockchain events
 
 ## ⚠️ Disclaimer
 
