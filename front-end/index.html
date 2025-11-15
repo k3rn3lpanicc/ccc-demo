@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Private Market Prediction</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="header">
+        <h1>🔒 Private Market Prediction</h1>
+        <p class="subtitle">Privacy-Preserving Betting System with Threshold Encryption</p>
+      </header>
+
+      <div class="container">
+        <!-- Contract Status -->
+        <div class="card status-card">
+          <h2>Contract Status</h2>
+          <div id="contract-status">
+            <div class="status-item">
+              <span class="label">Address:</span>
+              <span class="value" id="contract-address">Loading...</span>
+            </div>
+            <div class="status-item">
+              <span class="label">Balance:</span>
+              <span class="value" id="contract-balance">Loading...</span>
+            </div>
+            <div class="status-item">
+              <span class="label">Status:</span>
+              <span class="value" id="betting-status">Loading...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- A-Ratio Chart -->
+        <div class="card chart-card">
+          <h2>📊 Ratios Over Time</h2>
+          <p class="info-text">Privacy protection: Ratios revealed only every 5 votes</p>
+          <div class="chart-container">
+            <canvas id="ratioChart"></canvas>
+          </div>
+          <div id="no-data-message" class="no-data">
+            No data yet. Submit votes to see the ratios!
+          </div>
+        </div>
+
+        <!-- Voting Form -->
+        <div class="card vote-card">
+          <h2>🗳️ Cast Your Vote</h2>
+          <form id="vote-form">
+            <div class="form-group">
+              <label for="account-select">Select Account:</label>
+              <select id="account-select" required>
+                <option value="">Loading accounts...</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="bet-amount">Bet Amount (ETH):</label>
+              <input 
+                type="number" 
+                id="bet-amount" 
+                step="0.01" 
+                min="0.01" 
+                value="0.1" 
+                required 
+              />
+            </div>
+
+            <div class="form-group">
+              <label>Vote For:</label>
+              <div class="radio-group">
+                <label class="radio-label">
+                  <input type="radio" name="vote-option" value="A" checked />
+                  <span class="radio-text">Option A</span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="vote-option" value="B" />
+                  <span class="radio-text">Option B</span>
+                </label>
+              </div>
+            </div>
+
+            <button type="submit" id="vote-button" class="btn-primary">
+              Submit Vote
+            </button>
+
+            <div id="vote-result" class="vote-result"></div>
+          </form>
+
+          <div class="finish-section">
+            <button id="finish-button" class="btn-danger">
+              🏁 Finish Prediction
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Finish Prediction Modal -->
+    <div id="finish-modal" class="modal-overlay">
+      <div class="modal">
+        <h2>🏁 Finish Prediction</h2>
+        <div class="modal-content">
+          <div class="form-group">
+            <label>Select Winning Option:</label>
+            <div class="radio-group">
+              <label class="radio-label">
+                <input type="radio" name="winner-option" value="A" checked />
+                <span class="radio-text">Option A</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="winner-option" value="B" />
+                <span class="radio-text">Option B</span>
+              </label>
+            </div>
+          </div>
+          <div id="finish-result" class="vote-result"></div>
+        </div>
+        <div class="modal-buttons">
+          <button id="confirm-finish" class="btn-primary">
+            Confirm & Distribute
+          </button>
+          <button id="cancel-finish" class="btn-danger">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

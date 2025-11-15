@@ -5,6 +5,7 @@ import json
 import time
 import requests
 from web3 import Web3
+from datetime import datetime
 
 # Configuration
 CONTRACT_ADDRESS_FILE = "contract-address.json"
@@ -12,6 +13,7 @@ CONTRACT_ABI_FILE = "contract-abi.json"
 RPC_URL = "http://127.0.0.1:8545"
 NODE_URL = "http://127.0.0.1:5000/submit_vote"
 POLL_INTERVAL = 2  # seconds
+HISTORY_FILE = "a_ratio_history.json"
 
 
 def load_contract():
@@ -26,7 +28,22 @@ def load_contract():
     return contract_address, contract_abi
 
 
-def process_vote_event(event, contract, w3):
+def load_history():
+    """Load a_ratio history from file"""
+    try:
+        with open(HISTORY_FILE, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
+
+
+def save_history(history):
+    """Save a_ratio history to file"""
+    with open(HISTORY_FILE, 'w') as f:
+        json.dump(history, f, indent=2)
+
+
+def process_vote_event(event, contract, w3, history):
     """Process a VoteSubmitted event"""
     print("\n" + "="*60)
     print(f"📥 New Vote Event Detected!")
@@ -66,17 +83,29 @@ def process_vote_event(event, contract, w3):
             new_state = result.get("new_encrypted_state")
             print("✅ Vote processed successfully!")
             print(f"Vote info: {result.get('vote_processed')}")
-            print(f"Total votes: {result.get('total_votes', 'unknown')}")
+            total_votes = result.get('total_votes', 0)
+            print(f"Total votes: {total_votes}")
             
-            # Display a_ratio only if it was revealed (privacy protection)
+            # Display a_ratio and a_funds_ratio only if revealed (privacy protection)
             if "a_ratio" in result:
                 a_ratio = result.get("a_ratio")
+                a_funds_ratio = result.get("a_funds_ratio")
                 if a_ratio is not None:
                     print(f"📊 A-ratio revealed: {a_ratio:.2%}")
+                    if a_funds_ratio is not None:
+                        print(f"💰 A-funds-ratio revealed: {a_funds_ratio:.2%}")
+                    # Save to history
+                    history.append({
+                        "timestamp": datetime.now().isoformat(),
+                        "a_ratio": a_ratio,
+                        "a_funds_ratio": a_funds_ratio,
+                        "total_votes": total_votes
+                    })
+                    save_history(history)
                 else:
                     print("📊 A-ratio: No votes yet")
             else:
-                print("🔒 A-ratio hidden for privacy (revealed every 5 votes)")
+                print("🔒 Ratios hidden for privacy (revealed every 5 votes)")
             
             # Update contract state
             print("\n📝 Updating contract state...")
@@ -136,6 +165,10 @@ def main():
         print("   Make sure contract is deployed and ABI is exported")
         return
     
+    # Load history
+    history = load_history()
+    print(f"   Loaded {len(history)} historical a_ratio entries")
+    
     # Start listening for events
     print("\n👂 Listening for VoteSubmitted events...")
     print("   Press Ctrl+C to stop\n")
@@ -174,7 +207,7 @@ def main():
                     for event in events:
                         tx_hash = event['transactionHash'].hex()
                         if tx_hash not in processed_tx_hashes:
-                            process_vote_event(event, contract, w3)
+                            process_vote_event(event, contract, w3, history)
                             processed_tx_hashes.add(tx_hash)
                 except Exception as e:
                     print(f"⚠️  Filter API not available, using block scanning: {e}")
@@ -194,7 +227,7 @@ def main():
                                                 event = contract.events.VoteSubmitted().process_log(log)
                                                 tx_hash = event['transactionHash'].hex()
                                                 if tx_hash not in processed_tx_hashes:
-                                                    process_vote_event(event, contract, w3)
+                                                    process_vote_event(event, contract, w3, history)
                                                     processed_tx_hashes.add(tx_hash)
                                             except Exception as e3:
                                                 print(f"   Could not process log: {e3}")

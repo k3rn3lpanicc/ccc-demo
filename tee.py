@@ -105,6 +105,7 @@ def initialize_empty_state():
     try:
         empty_state = {
             "a_ratio": None,
+            "a_funds_ratio": None,
             "votes": {}
         }
         
@@ -192,14 +193,22 @@ def process_vote(data: SubmitVoteRequest):
         # Add vote to state
         current_state["votes"][wallet_address] = vote_info
         
-        # Recalculate a_ratio
+        # Recalculate a_ratio and a_funds_ratio
         total_votes = len(current_state["votes"])
         a_votes = sum(1 for v in current_state["votes"].values() if v["bet_on"] == "A")
+        
+        total_funds = sum(v["bet_amount"] for v in current_state["votes"].values())
+        a_funds = sum(v["bet_amount"] for v in current_state["votes"].values() if v["bet_on"] == "A")
         
         if total_votes > 0:
             current_state["a_ratio"] = a_votes / total_votes
         else:
             current_state["a_ratio"] = None
+            
+        if total_funds > 0:
+            current_state["a_funds_ratio"] = a_funds / total_funds
+        else:
+            current_state["a_funds_ratio"] = None
         
         print("Updated state:", current_state)
         
@@ -214,12 +223,13 @@ def process_vote(data: SubmitVoteRequest):
             "total_votes": total_votes
         }
         
-        # Conditionally include a_ratio for privacy
+        # Conditionally include a_ratio and a_funds_ratio for privacy
         if total_votes % 5 == 0:
             response["a_ratio"] = current_state["a_ratio"]
-            print(f"🔓 Revealing a_ratio (total votes: {total_votes})")
+            response["a_funds_ratio"] = current_state["a_funds_ratio"]
+            print(f"🔓 Revealing a_ratio and a_funds_ratio (total votes: {total_votes})")
         else:
-            print(f"🔒 Hiding a_ratio for privacy (total votes: {total_votes})")
+            print(f"🔒 Hiding ratios for privacy (total votes: {total_votes})")
         
         return response
     except Exception as e:

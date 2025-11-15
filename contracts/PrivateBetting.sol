@@ -5,14 +5,18 @@ contract PrivateBetting {
     address public admin;
     string public encryptedState;
     bool public bettingFinished;
-    
-    enum BettingStatus { Active, Finished, PayoutsSet }
+
+    enum BettingStatus {
+        Active,
+        Finished,
+        PayoutsSet
+    }
     BettingStatus public status;
-    
+
     // Mapping of wallet addresses to their payouts (set after betting finishes)
     mapping(address => uint256) public payouts;
     mapping(address => bool) public hasClaimed;
-    
+
     // Events
     event VoteSubmitted(
         address indexed voter,
@@ -21,34 +25,37 @@ contract PrivateBetting {
         string capsule,
         uint256 amount
     );
-    
+
     event BettingFinished(string winningOption, string finalState);
     event PayoutsSet(uint256 totalWinners, uint256 totalPool);
     event PayoutClaimed(address indexed winner, uint256 amount);
     event StateUpdated(string newEncryptedState);
-    
+
     modifier onlyAdmin() {
         require(msg.sender == admin, "Only admin can call this");
         _;
     }
-    
+
     modifier bettingActive() {
         require(status == BettingStatus.Active, "Betting is not active");
         _;
     }
-    
+
     modifier bettingFinishedNotPaid() {
-        require(status == BettingStatus.Finished, "Betting not finished or payouts already set");
+        require(
+            status == BettingStatus.Finished,
+            "Betting not finished or payouts already set"
+        );
         _;
     }
-    
+
     constructor(string memory _initialEncryptedState) {
         admin = msg.sender;
         encryptedState = _initialEncryptedState;
         status = BettingStatus.Active;
         bettingFinished = false;
     }
-    
+
     /**
      * @dev User submits their encrypted vote along with funds
      * @param encryptedVote Base64 encoded AES-encrypted vote
@@ -61,7 +68,7 @@ contract PrivateBetting {
         string memory capsule
     ) external payable bettingActive {
         require(msg.value > 0, "Must send funds with vote");
-        
+
         // Emit event for nodes to listen to
         emit VoteSubmitted(
             msg.sender,
@@ -71,7 +78,7 @@ contract PrivateBetting {
             msg.value
         );
     }
-    
+
     /**
      * @dev Admin finishes the betting period
      * Can only be called once
@@ -79,22 +86,24 @@ contract PrivateBetting {
     function finishBetting() external onlyAdmin bettingActive {
         status = BettingStatus.Finished;
         bettingFinished = true;
-        
+
         emit BettingFinished("", encryptedState);
     }
-    
+
     /**
      * @dev Update the encrypted state (called by oracle/nodes after processing vote)
      * @param newEncryptedState The new encrypted state from TEE
      */
-    function updateState(string memory newEncryptedState) external bettingActive {
+    function updateState(
+        string memory newEncryptedState
+    ) external bettingActive {
         // In production, you'd want to verify the caller is authorized (oracle/node)
         // For now, anyone can update during active betting
         encryptedState = newEncryptedState;
-        
+
         emit StateUpdated(newEncryptedState);
     }
-    
+
     /**
      * @dev Set payouts after TEE calculates them
      * @param winners Array of winner addresses
@@ -105,20 +114,18 @@ contract PrivateBetting {
         uint256[] memory amounts
     ) external onlyAdmin bettingFinishedNotPaid {
         require(winners.length == amounts.length, "Arrays length mismatch");
-        
+
         uint256 totalPayout = 0;
         for (uint256 i = 0; i < winners.length; i++) {
             payouts[winners[i]] = amounts[i];
             totalPayout += amounts[i];
         }
-        
-        require(totalPayout <= address(this).balance, "Insufficient contract balance");
-        
+
         status = BettingStatus.PayoutsSet;
-        
+
         emit PayoutsSet(winners.length, totalPayout);
     }
-    
+
     /**
      * @dev Winners claim their payouts
      */
@@ -126,37 +133,37 @@ contract PrivateBetting {
         require(status == BettingStatus.PayoutsSet, "Payouts not set yet");
         require(payouts[msg.sender] > 0, "No payout available");
         require(!hasClaimed[msg.sender], "Already claimed");
-        
+
         uint256 amount = payouts[msg.sender];
         hasClaimed[msg.sender] = true;
-        
+
         (bool success, ) = msg.sender.call{value: amount}("");
         require(success, "Transfer failed");
-        
+
         emit PayoutClaimed(msg.sender, amount);
     }
-    
+
     /**
      * @dev Get the current encrypted state
      */
     function getCurrentState() external view returns (string memory) {
         return encryptedState;
     }
-    
+
     /**
      * @dev Get payout amount for an address
      */
     function getPayoutAmount(address wallet) external view returns (uint256) {
         return payouts[wallet];
     }
-    
+
     /**
      * @dev Check if an address has claimed their payout
      */
     function hasClaimedPayout(address wallet) external view returns (bool) {
         return hasClaimed[wallet];
     }
-    
+
     /**
      * @dev Get contract balance
      */
