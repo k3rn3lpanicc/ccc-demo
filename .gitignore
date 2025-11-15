@@ -8,3 +8,6 @@ artifacts/
 coverage
 cache/
 *.log
+contract-abi.json
+contract-address.json
+umbral_state.json
