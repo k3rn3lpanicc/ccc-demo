@@ -14,26 +14,80 @@
       </header>
 
       <div class="container">
-        <!-- Contract Status -->
-        <div class="card status-card">
-          <h2>Contract Status</h2>
-          <div id="contract-status">
-            <div class="status-item">
-              <span class="label">Address:</span>
-              <span class="value" id="contract-address">Loading...</span>
+        <!-- Top Row: Status and Vote Form -->
+        <div class="top-row">
+          <!-- Contract Status -->
+          <div class="card status-card">
+            <h2>Contract Status</h2>
+            <div id="contract-status">
+              <div class="status-item">
+                <span class="label">Address:</span>
+                <span class="value" id="contract-address">Loading...</span>
+              </div>
+              <div class="status-item">
+                <span class="label">Balance:</span>
+                <span class="value" id="contract-balance">Loading...</span>
+              </div>
+              <div class="status-item">
+                <span class="label">Status:</span>
+                <span class="value" id="betting-status">Loading...</span>
+              </div>
             </div>
-            <div class="status-item">
-              <span class="label">Balance:</span>
-              <span class="value" id="contract-balance">Loading...</span>
-            </div>
-            <div class="status-item">
-              <span class="label">Status:</span>
-              <span class="value" id="betting-status">Loading...</span>
+          </div>
+
+          <!-- Voting Form -->
+          <div class="card vote-card">
+            <h2>🗳️ Cast Your Vote</h2>
+            <form id="vote-form">
+              <div class="form-group">
+                <label for="account-select">Select Account:</label>
+                <select id="account-select" required>
+                  <option value="">Loading accounts...</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="bet-amount">Bet Amount (ETH):</label>
+                <input 
+                  type="number" 
+                  id="bet-amount" 
+                  step="0.01" 
+                  min="0.01" 
+                  value="0.1" 
+                  required 
+                />
+              </div>
+
+              <div class="form-group">
+                <label>Vote For:</label>
+                <div class="radio-group">
+                  <label class="radio-label">
+                    <input type="radio" name="vote-option" value="A" checked />
+                    <span class="radio-text">Option A</span>
+                  </label>
+                  <label class="radio-label">
+                    <input type="radio" name="vote-option" value="B" />
+                    <span class="radio-text">Option B</span>
+                  </label>
+                </div>
+              </div>
+
+              <button type="submit" id="vote-button" class="btn-primary">
+                Submit Vote
+              </button>
+
+              <div id="vote-result" class="vote-result"></div>
+            </form>
+
+            <div class="finish-section">
+              <button id="finish-button" class="btn-danger">
+                🏁 Finish Prediction
+              </button>
             </div>
           </div>
         </div>
 
-        <!-- A-Ratio Chart -->
+        <!-- Chart - Full Width -->
         <div class="card chart-card">
           <h2>📊 Ratios Over Time</h2>
           <p class="info-text">Privacy protection: Ratios revealed only every 5 votes</p>
@@ -42,57 +96,6 @@
           </div>
           <div id="no-data-message" class="no-data">
             No data yet. Submit votes to see the ratios!
-          </div>
-        </div>
-
-        <!-- Voting Form -->
-        <div class="card vote-card">
-          <h2>🗳️ Cast Your Vote</h2>
-          <form id="vote-form">
-            <div class="form-group">
-              <label for="account-select">Select Account:</label>
-              <select id="account-select" required>
-                <option value="">Loading accounts...</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="bet-amount">Bet Amount (ETH):</label>
-              <input 
-                type="number" 
-                id="bet-amount" 
-                step="0.01" 
-                min="0.01" 
-                value="0.1" 
-                required 
-              />
-            </div>
-
-            <div class="form-group">
-              <label>Vote For:</label>
-              <div class="radio-group">
-                <label class="radio-label">
-                  <input type="radio" name="vote-option" value="A" checked />
-                  <span class="radio-text">Option A</span>
-                </label>
-                <label class="radio-label">
-                  <input type="radio" name="vote-option" value="B" />
-                  <span class="radio-text">Option B</span>
-                </label>
-              </div>
-            </div>
-
-            <button type="submit" id="vote-button" class="btn-primary">
-              Submit Vote
-            </button>
-
-            <div id="vote-result" class="vote-result"></div>
-          </form>
-
-          <div class="finish-section">
-            <button id="finish-button" class="btn-danger">
-              🏁 Finish Prediction
-            </button>
           </div>
         </div>
       </div>

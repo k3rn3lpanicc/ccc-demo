@@ -69,14 +69,20 @@ body {
 }
 
 .container {
-  display: grid;
-  grid-template-columns: 1fr 2fr 1.5fr;
+  display: flex;
+  flex-direction: column;
   gap: 30px;
   margin-bottom: 40px;
 }
 
+.top-row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 30px;
+}
+
 @media (max-width: 1200px) {
-  .container {
+  .top-row {
     grid-template-columns: 1fr;
   }
 }
@@ -132,18 +138,12 @@ body {
 
 /* Chart Card */
 .chart-card {
-  grid-column: span 1;
-}
-
-@media (min-width: 1200px) {
-  .chart-card {
-    grid-column: span 1;
-  }
+  width: 100%;
 }
 
 .chart-container {
   position: relative;
-  height: 300px;
+  height: 400px;
   margin-top: 20px;
 }
 

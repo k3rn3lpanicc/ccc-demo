@@ -8,7 +8,7 @@ module.exports = {
 			chainId: 1337,
 			accounts: {
 				mnemonic: 'test test test test test test test test test test test junk',
-				count: 50,
+				count: 500,
 				initialIndex: 0,
 				path: "m/44'/60'/0'/0",
 				accountsBalance: '10000000000000000000000',
