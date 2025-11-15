@@ -16,11 +16,21 @@ CONTRACT_ABI_FILE = "contract-abi.json"
 STATE_FILE = "./kd/umbral_state.json"
 
 # Configuration
-START_ACCOUNT = 10
+START_ACCOUNT = 45
 END_ACCOUNT = 400
 MIN_BET = 0.1  # ETH
 MAX_BET = 20.0  # ETH
 DELAY_BETWEEN_VOTES = 0.5  # seconds
+
+# Voting behavior configuration
+A_VOTE_PROBABILITY = 0.65  # 65% chance to vote for A
+A_HIGH_BET_PROBABILITY = 0.3  # 30% of A voters bet high (5-10 ETH)
+B_HIGH_BET_PROBABILITY = 0.7  # 70% of B voters bet high (5-10 ETH)
+
+# This creates interesting divergence:
+# - More people vote for A (65% vs 35%)
+# - But B voters bet more aggressively
+# - Result: A wins in vote count, but funds ratio is closer or even favors B
 
 
 def b64e(b: bytes) -> str:
@@ -88,6 +98,14 @@ def main():
     print(f"Accounts: {START_ACCOUNT} to {END_ACCOUNT}")
     print(f"Bet range: {MIN_BET} to {MAX_BET} ETH")
     print(f"Delay between votes: {DELAY_BETWEEN_VOTES} seconds")
+    print()
+    print("Voting Strategy:")
+    print(f"  - {A_VOTE_PROBABILITY*100:.0f}% likely to vote for A (majority)")
+    print(
+        f"  - A voters: {A_HIGH_BET_PROBABILITY*100:.0f}% bet high, {(1-A_HIGH_BET_PROBABILITY)*100:.0f}% bet low")
+    print(
+        f"  - B voters: {B_HIGH_BET_PROBABILITY*100:.0f}% bet high, {(1-B_HIGH_BET_PROBABILITY)*100:.0f}% bet low")
+    print(f"  → Expect: More A votes, but B has more funds!")
     print("="*70 + "\n")
 
     # Connect to Ethereum
@@ -147,9 +165,24 @@ def main():
     for account_index in range(START_ACCOUNT, END_ACCOUNT + 1):
         voter_address = accounts[account_index]
 
-        # Random bet amount and choice
-        bet_amount = round(random.uniform(MIN_BET, MAX_BET), 4)
-        bet_on = random.choice(['A', 'B'])
+        # Determine vote choice with bias
+        bet_on = 'A' if random.random() < A_VOTE_PROBABILITY else 'B'
+
+        # Determine bet amount based on choice
+        if bet_on == 'A':
+            # A voters: mostly small to medium bets
+            if random.random() < A_HIGH_BET_PROBABILITY:
+                bet_amount = round(random.uniform(5.0, MAX_BET), 4)  # High bet
+            else:
+                bet_amount = round(random.uniform(
+                    MIN_BET, 3.0), 4)  # Low to medium bet
+        else:
+            # B voters: mostly high bets
+            if random.random() < B_HIGH_BET_PROBABILITY:
+                bet_amount = round(random.uniform(5.0, MAX_BET), 4)  # High bet
+            else:
+                bet_amount = round(random.uniform(
+                    MIN_BET, 3.0), 4)  # Low to medium bet
 
         # Track stats
         if bet_on == 'A':
