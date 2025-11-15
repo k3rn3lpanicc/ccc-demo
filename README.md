@@ -660,19 +660,53 @@ private-market-prediction/
 │   ├── node.py                     # Individual node implementation
 │   └── run_nodes.py               # Starts 7 threshold nodes
 ├── contracts/
-│   └── PrivateBetting.sol         # Solidity smart contract
+│   └── PrivateBetting.sol         # Solidity smart contract (with batching)
 ├── scripts/
 │   ├── deploy-with-tee.js         # Deploy with TEE initialization
 │   ├── export-abi.js              # Export contract ABI
 │   └── test-contract.js           # Contract testing script
-├── contract_listener.py            # Event listener & processor
-├── submit_vote_to_contract.py     # User vote submission
-├── finish_and_distribute.py       # Admin settlement
+├── front-end/                      # Web frontend (Vite + TypeScript)
+│   ├── src/
+│   │   ├── main.ts                # Frontend logic
+│   │   └── style.css              # Dark theme with teal blue
+│   ├── index.html                 # Main page
+│   ├── package.json               # Frontend dependencies
+│   └── README.md                  # Frontend docs
+├── contract_listener.py            # Event listener & history tracker
+├── frontend_api.py                # Backend API for web frontend
+├── submit_vote_to_contract.py     # CLI vote submission
+├── auto_vote.py                   # Automated voting script (testing)
+├── finish_and_distribute.py       # Admin settlement with batching
 ├── claim_payout.py                # Winner claim interface
+├── a_ratio_history.json           # Auto-generated ratio history
 ├── hardhat.config.js              # Hardhat configuration
 ├── package.json                    # Node.js dependencies
-└── README.md                       # This file
+├── README.md                       # This file
+└── FRONTEND_SETUP.md              # Detailed frontend guide
 ```
+
+## New Features
+
+### Web Frontend
+- **Dark theme** with teal blue and cyan accents
+- **Dual-metric visualization**: A-ratio (vote %) and A-funds-ratio (funds %)
+- **Real-time chart** with Chart.js showing historical trends
+- **Account dropdown** supporting up to 50 Hardhat accounts
+- **Admin controls** for finishing predictions and distributing payouts
+- **Responsive design** with full-width chart display
+
+### Performance Optimizations
+- **Batched payouts**: Automatically splits large payout arrays into 50-address batches
+- **Gas optimization**: Each batch uses 10M gas limit
+- **Handles unlimited voters**: No more "out of gas" errors with many participants
+- **Smart chart updates**: Only redraws when data changes (no flickering)
+
+### Testing Tools
+- **auto_vote.py**: Automated voting with strategic distribution
+  - Configurable vote bias (default: 65% vote A, 35% vote B)
+  - Different betting strategies (A voters bet small, B voters bet large)
+  - Creates interesting divergence between the two metrics
+  - Adjustable parameters for custom scenarios
 
 ## Security Considerations
 
@@ -682,10 +716,12 @@ private-market-prediction/
 - ✅ Forward secrecy prevents historical decryption
 - ✅ Byzantine fault tolerance (handles 3 corrupt nodes)
 - ✅ Smart contract enforces rules and holds funds
+- ✅ Batched payouts prevent gas limit issues
 - ⚠️  TEE is mocked (no hardware isolation)
 - ⚠️  No signature verification on TEE responses
 - ⚠️  Anyone can call `updateState()` (should be oracle-only)
 - ⚠️  Local development network (no real stakes)
+- ⚠️  Frontend uses predefined accounts (no wallet integration)
 
 ### Production Requirements
 
@@ -715,6 +751,20 @@ private-market-prediction/
    - Emergency pause mechanism
    - Upgrade mechanisms
 
+## Quick Start (All-in-One)
+
+For the complete setup with web frontend:
+
+1. **Terminal 1**: `python -m uvicorn tee:app`
+2. **Terminal 2**: `cd kd && python kd.py` (paste TEE key, then exit)
+3. **Terminal 3**: `cd nodes && python run_nodes.py`
+4. **Terminal 4**: `npm run node`
+5. **Terminal 5**: `npx hardhat run scripts/deploy-with-tee.js --network localhost`
+6. **Terminal 6**: `python contract_listener.py`
+7. **Terminal 7**: `python frontend_api.py`
+8. **Terminal 8**: `cd front-end && npm install && npm run dev`
+9. **Browser**: Open `http://localhost:3000`
+
 ## Testing
 
 ### Unit Tests
@@ -726,10 +776,13 @@ npx hardhat run scripts/test-contract.js --network localhost
 
 ### What to Expect
 
-- ✅ Votes submitted successfully
+- ✅ Votes submitted via web UI or CLI
 - ✅ Listener processes votes automatically
-- ✅ A-ratio revealed every 5 votes
+- ✅ A-ratio and A-funds-ratio revealed every 5 votes
+- ✅ Real-time chart updates showing both metrics
+- ✅ Divergence between vote count and funds (with auto_vote.py)
 - ✅ Corrupt nodes don't break the system
+- ✅ Automatic batching handles 100+ voters
 - ✅ Winners can claim their proportional share
 - ✅ Losers get 0
 - ✅ Contract balance depletes as winners claim
