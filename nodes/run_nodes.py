@@ -50,6 +50,7 @@ def main():
         env = os.environ.copy()
         env["KFRAG"] = kfrag_b64
         env["NODE_PORT"] = str(port)
+        env["NODE_ID"] = str(idx)
         if idx in corrupt_indexes:
             env["CORRUPTED"] = "1"
 
@@ -65,12 +66,22 @@ def main():
             str(port),
         ]
 
-        print(f"Starting node {idx} on port {port} with its own KFRAG...")
+        status = "[CORRUPT]" if idx in corrupt_indexes else "[Honest]"
+        print(f"Starting node {idx} on port {port} {status}")
         p = subprocess.Popen(cmd, env=env)
         processes.append(p)
 
-    print("All nodes started. PIDs:", [p.pid for p in processes])
-    print("Press Ctrl+C to stop them (or kill the PIDs manually).")
+    print("\n" + "="*60)
+    print("All nodes started with distributed leader election!")
+    print("="*60)
+    print(f"Corrupt nodes: {corrupt_indexes}")
+    print("Nodes will automatically:")
+    print("  - Monitor blockchain for events")
+    print("  - Elect leaders based on reputation")
+    print("  - Process votes when elected as leader")
+    print("  - Re-elect if leader fails/times out")
+    print("\nPress Ctrl+C to stop all nodes")
+    print("="*60)
 
     try:
         for p in processes:
