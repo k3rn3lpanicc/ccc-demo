@@ -480,7 +480,19 @@ B_HIGH_BET_PROBABILITY = 0.7  # 70% of B voters bet high
 
 ### Step 11: Finish Betting and Calculate Payouts
 
-**When voting is complete:**
+#### Option A: Use Web Interface (Recommended)
+
+1. Click the "🏁 Finish Prediction" button in the web UI
+2. Select the winning option (A or B)
+3. Click "Confirm & Distribute"
+4. Wait for all 3 steps to complete:
+   - Finish betting
+   - Calculate payouts (via TEE)
+   - Set payouts in contract (with automatic batching)
+
+**Note:** With many voters (50+), payouts are automatically batched in groups of 50 to avoid gas limits.
+
+#### Option B: Use Python Script
 
 ```bash
 python finish_and_distribute.py
@@ -535,11 +547,22 @@ STEP 3: SET PAYOUTS IN CONTRACT
 
 Set payouts in contract? (y/n): y
 
-📝 Setting payouts for 5 wallets...
+📝 Setting payouts for 90 wallets...
+   Using 2 batch(es) of up to 50 addresses each
+
+   Batch 1/2: Setting 50 payouts...
    Transaction sent: 0xabcdef...
-✅ Payouts set in contract!
+   ✅ Batch 1 complete!
    Block: 12
-   Gas used: 145823
+   Gas used: 3245823
+
+   Batch 2/2: Setting 40 payouts...
+   Transaction sent: 0xfedcba...
+   ✅ Batch 2 complete!
+   Block: 13
+   Gas used: 2598234
+
+✅ All payouts set in contract!
 
 ============================================================
 ✅ PROCESS COMPLETE!
@@ -576,7 +599,7 @@ Payouts:
   - Account 5: (0.15/0.45) × 0.75 = 0.25 ETH
 ```
 
-### Step 9: Claim Winnings
+### Step 12: Claim Winnings
 
 ```bash
 python claim_payout.py
