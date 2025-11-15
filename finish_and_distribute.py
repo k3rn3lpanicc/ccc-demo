@@ -156,34 +156,47 @@ def main():
         return
     
     # Prepare arrays for contract
-    winner_addresses = [payout['wallet'] for payout in payouts if payout['payout'] > 0]
-    winner_amounts = [w3.to_wei(payout['payout'], 'wei') for payout in payouts if payout['payout'] > 0]
-    
-    # Include losers with 0 payout
     all_addresses = [payout['wallet'] for payout in payouts]
-    all_amounts = [w3.to_wei(payout['payout'], 'wei') for payout in payouts]
+    all_amounts = [payout['payout'] for payout in payouts]  # Already in wei
     
     print(f"\n📝 Setting payouts for {len(all_addresses)} wallets...")
     
+    # Batch payouts to avoid gas limits (50 per batch)
+    BATCH_SIZE = 50
+    total_batches = (len(all_addresses) + BATCH_SIZE - 1) // BATCH_SIZE
+    
+    print(f"   Using {total_batches} batch(es) of up to {BATCH_SIZE} addresses each")
+    
     try:
-        tx_hash = contract.functions.setPayouts(
-            all_addresses,
-            all_amounts
-        ).transact({
-            'from': admin,
-            'gas': 5000000
-        })
+        for i in range(0, len(all_addresses), BATCH_SIZE):
+            batch_addresses = all_addresses[i:i + BATCH_SIZE]
+            batch_amounts = all_amounts[i:i + BATCH_SIZE]
+            is_last_batch = (i + BATCH_SIZE) >= len(all_addresses)
+            
+            batch_num = i // BATCH_SIZE + 1
+            print(f"\n   Batch {batch_num}/{total_batches}: Setting {len(batch_addresses)} payouts...")
+            
+            tx_hash = contract.functions.setPayouts(
+                batch_addresses,
+                batch_amounts,
+                is_last_batch
+            ).transact({
+                'from': admin,
+                'gas': 10000000
+            })
+            
+            print(f"   Transaction sent: {tx_hash.hex()}")
+            receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+            
+            if receipt['status'] == 1:
+                print(f"   ✅ Batch {batch_num} complete!")
+                print(f"   Block: {receipt['blockNumber']}")
+                print(f"   Gas used: {receipt['gasUsed']}")
+            else:
+                print(f"   ❌ Batch {batch_num} failed")
+                return
         
-        print(f"   Transaction sent: {tx_hash.hex()}")
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        
-        if receipt['status'] == 1:
-            print(f"✅ Payouts set in contract!")
-            print(f"   Block: {receipt['blockNumber']}")
-            print(f"   Gas used: {receipt['gasUsed']}")
-        else:
-            print(f"❌ Transaction failed")
-            return
+        print(f"\n✅ All payouts set in contract!")
     except Exception as e:
         print(f"❌ Error setting payouts: {e}")
         import traceback

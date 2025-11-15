@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "C:\\Users\\matin\\Desktop\\private-market-prediction\\contracts\\PrivateBetting.sol": {
-      "lastModificationDate": 1763243868213,
-      "contentHash": "7c16c959ebf5f04132309799d4f5ee8a",
+      "lastModificationDate": 1763245643042,
+      "contentHash": "c54038a76c5cb0686dc45f563ff8ffbf",
       "sourceName": "contracts/PrivateBetting.sol",
       "solcConfig": {
         "version": "0.8.20",

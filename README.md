@@ -6,12 +6,15 @@ A privacy-preserving betting system that uses threshold encryption and mock Trus
 
 This is a proof-of-concept betting platform where:
 
-- **Users vote privately** on options A or B with ETH stakes
+- **Users vote privately** on options A or B with ETH stakes via a web interface
 - **Individual votes remain encrypted** throughout the voting period
 - **Vote distribution is revealed periodically** (every 5 votes) to prevent identification
+- **Two metrics tracked**: A-ratio (vote count) and A-funds-ratio (funds amount)
+- **Real-time visualization** shows both metrics on an interactive chart
 - **TEE processes all votes** in a confidential manner
 - **Smart contract holds funds** and enforces settlement rules
 - **Winners are paid proportionally** to their stakes
+- **Automated voting** script available for testing with multiple accounts
 
 ## Cryptographic Scheme
 
@@ -84,8 +87,10 @@ User Vote → Smart Contract → Event Listener → Nodes (Threshold Re-encrypti
 #### Privacy Protection
 
 - **A-ratio** (percentage voting for A) is only revealed when `total_votes % 5 == 0`
+- **A-funds-ratio** (percentage of funds on A) is also revealed at the same intervals
 - This prevents identifying individual votes from ratio changes
 - Provides batch transparency while maintaining voter privacy
+- Historical data is tracked and visualized in real-time chart
 
 #### Settlement
 
@@ -280,7 +285,8 @@ python contract_listener.py
      - TEE decrypts and processes vote
      - Returns new encrypted state
   3. Listener receives result and updates contract state
-- Displays a_ratio when `total_votes % 5 == 0` (if revealed by TEE)
+- Displays a_ratio and a_funds_ratio when `total_votes % 5 == 0` (if revealed by TEE)
+- **Tracks history** and saves to `a_ratio_history.json` for frontend visualization
 
 **Expected Output:**
 
@@ -304,7 +310,58 @@ Process past events from block 0? (y/n): n
 
 **Keep this terminal running.**
 
-### Step 7: Submit Votes
+### Step 7: Start Frontend API
+
+**New terminal:**
+
+```bash
+python frontend_api.py
+```
+
+**What this does:**
+
+- Starts FastAPI server on `http://127.0.0.1:3001`
+- Provides REST API for the web frontend
+- Handles vote submission with automatic encryption
+- Manages finish/distribute workflow with batching for large voter counts
+- Supports up to 50 accounts from Hardhat
+
+**Keep this terminal running.**
+
+### Step 8: Start Web Frontend
+
+**New terminal:**
+
+```bash
+cd front-end
+npm install  # First time only
+npm run dev
+```
+
+**Access the frontend:**
+
+Open your browser to `http://localhost:3000`
+
+**Features:**
+
+- **Dark theme** with teal blue accents
+- **Real-time chart** showing A-ratio and A-funds-ratio over time
+- **Vote submission** using dropdown of Hardhat accounts (no wallet needed)
+- **Contract status** display
+- **Finish prediction** button for admin
+
+### Step 9: Submit Votes (Web UI or Script)
+
+#### Option A: Use Web Interface (Recommended)
+
+1. Open `http://localhost:3000` in your browser
+2. Select an account from the dropdown
+3. Enter bet amount (e.g., 0.1 ETH)
+4. Choose Option A or B
+5. Click "Submit Vote"
+6. Watch the chart update every 5 votes!
+
+#### Option B: Use Python Script
 
 **New terminal:**
 
@@ -390,9 +447,38 @@ python submit_vote_to_contract.py  # Account 5, 0.05 ETH, A
 
 ```
 📊 A-ratio revealed: 60.00%
+💰 A-funds-ratio revealed: 45.00%
 ```
 
-### Step 8: Finish Betting and Calculate Payouts
+### Step 10: Automated Voting (Optional - For Testing)
+
+**For quickly testing with many votes:**
+
+```bash
+python auto_vote.py
+```
+
+**What this does:**
+
+- Automatically votes from accounts 10-49 (40 accounts)
+- Random amounts between 0.1-10 ETH
+- Strategic distribution:
+  - 65% vote for A (but with smaller bets)
+  - 35% vote for B (but with larger bets)
+  - Creates interesting divergence between vote ratio and funds ratio!
+- 2 second delay between votes
+- Shows statistics at the end
+
+**Configuration** (edit `auto_vote.py`):
+```python
+START_ACCOUNT = 10
+END_ACCOUNT = 49
+A_VOTE_PROBABILITY = 0.65  # 65% vote A
+A_HIGH_BET_PROBABILITY = 0.3  # 30% of A voters bet high
+B_HIGH_BET_PROBABILITY = 0.7  # 70% of B voters bet high
+```
+
+### Step 11: Finish Betting and Calculate Payouts
 
 **When voting is complete:**
 

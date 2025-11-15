@@ -292,7 +292,7 @@ class SetPayoutsRequest(BaseModel):
 
 @app.post("/api/set-payouts")
 def set_payouts(req: SetPayoutsRequest):
-    """Set payouts in contract"""
+    """Set payouts in contract with batching to avoid gas limits"""
     try:
         w3 = Web3(Web3.HTTPProvider(RPC_URL))
         if not w3.is_connected():
@@ -315,25 +315,41 @@ def set_payouts(req: SetPayoutsRequest):
         all_addresses = [payout['wallet'] for payout in req.payouts]
         all_amounts = [payout['payout'] for payout in req.payouts]
         
-        tx_hash = contract.functions.setPayouts(
-            all_addresses,
-            all_amounts
-        ).transact({
-            'from': admin,
-            'gas': 5000000
-        })
+        # Batch payouts to avoid gas limits (50 per batch)
+        BATCH_SIZE = 50
+        total_batches = (len(all_addresses) + BATCH_SIZE - 1) // BATCH_SIZE
         
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        tx_hashes = []
         
-        if receipt['status'] == 1:
-            return {
-                "success": True,
-                "txHash": tx_hash.hex(),
-                "blockNumber": receipt['blockNumber'],
-                "gasUsed": receipt['gasUsed']
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Transaction failed")
+        for i in range(0, len(all_addresses), BATCH_SIZE):
+            batch_addresses = all_addresses[i:i + BATCH_SIZE]
+            batch_amounts = all_amounts[i:i + BATCH_SIZE]
+            is_last_batch = (i + BATCH_SIZE) >= len(all_addresses)
+            
+            print(f"Setting payouts batch {i//BATCH_SIZE + 1}/{total_batches} ({len(batch_addresses)} addresses)")
+            
+            tx_hash = contract.functions.setPayouts(
+                batch_addresses,
+                batch_amounts,
+                is_last_batch
+            ).transact({
+                'from': admin,
+                'gas': 10000000
+            })
+            
+            receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+            
+            if receipt['status'] != 1:
+                raise HTTPException(status_code=500, detail=f"Transaction failed in batch {i//BATCH_SIZE + 1}")
+            
+            tx_hashes.append(tx_hash.hex())
+        
+        return {
+            "success": True,
+            "txHashes": tx_hashes,
+            "batches": total_batches,
+            "totalPayouts": len(all_addresses)
+        }
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -105,25 +105,26 @@ contract PrivateBetting {
     }
 
     /**
-     * @dev Set payouts after TEE calculates them
+     * @dev Set payouts after TEE calculates them (supports batching)
      * @param winners Array of winner addresses
      * @param amounts Array of payout amounts (in wei)
+     * @param isLastBatch True if this is the final batch
      */
     function setPayouts(
         address[] memory winners,
-        uint256[] memory amounts
+        uint256[] memory amounts,
+        bool isLastBatch
     ) external onlyAdmin bettingFinishedNotPaid {
         require(winners.length == amounts.length, "Arrays length mismatch");
 
-        uint256 totalPayout = 0;
         for (uint256 i = 0; i < winners.length; i++) {
             payouts[winners[i]] = amounts[i];
-            totalPayout += amounts[i];
         }
 
-        status = BettingStatus.PayoutsSet;
-
-        emit PayoutsSet(winners.length, totalPayout);
+        if (isLastBatch) {
+            status = BettingStatus.PayoutsSet;
+            emit PayoutsSet(winners.length, 0);
+        }
     }
 
     /**
