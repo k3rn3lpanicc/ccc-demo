@@ -202,7 +202,6 @@ def process_vote(data: SubmitVoteRequest):
         response = {
             "success": True,
             "new_encrypted_state": new_encrypted_state,
-            "vote_processed": vote_info,
             "total_votes": total_votes
         }
 

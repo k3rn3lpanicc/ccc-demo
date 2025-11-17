@@ -81,7 +81,6 @@ def process_vote_event(event, contract, w3, history):
         if result.get("success"):
             new_state = result.get("new_encrypted_state")
             print("✓ Vote processed successfully!")
-            print(f"Vote info: {result.get('vote_processed')}")
             total_votes = result.get('total_votes', 0)
             print(f"Total votes: {total_votes}")
 
