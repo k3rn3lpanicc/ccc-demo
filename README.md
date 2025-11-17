@@ -176,7 +176,7 @@ Enter TEE public key (Bob's public key): <paste the key from Step 1>
 {
   "master_public_key": "...",
   "authority_public_key": "...",
-  "bobs_public_key": "...",  // TEE public key
+  "tee_public_key": "...",  // TEE public key
   "kfrags": [...],  // 7 key fragments
   "threshold": 4,
   "shares": 7
@@ -470,6 +470,7 @@ python auto_vote.py
 - Shows statistics at the end
 
 **Configuration** (edit `auto_vote.py`):
+
 ```python
 START_ACCOUNT = 10
 END_ACCOUNT = 49
@@ -688,6 +689,7 @@ private-market-prediction/
 ## New Features
 
 ### Web Frontend
+
 - **Dark theme** with teal blue and cyan accents
 - **Dual-metric visualization**: A-ratio (vote %) and A-funds-ratio (funds %)
 - **Real-time chart** with Chart.js showing historical trends
@@ -696,12 +698,14 @@ private-market-prediction/
 - **Responsive design** with full-width chart display
 
 ### Performance Optimizations
+
 - **Batched payouts**: Automatically splits large payout arrays into 50-address batches
 - **Gas optimization**: Each batch uses 10M gas limit
 - **Handles unlimited voters**: No more "out of gas" errors with many participants
 - **Smart chart updates**: Only redraws when data changes (no flickering)
 
 ### Testing Tools
+
 - **auto_vote.py**: Automated voting with strategic distribution
   - Configurable vote bias (default: 65% vote A, 35% vote B)
   - Different betting strategies (A voters bet small, B voters bet large)

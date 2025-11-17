@@ -17,7 +17,7 @@ STATE_FILE = "./kd/umbral_state.json"
 
 # Configuration
 START_ACCOUNT = 45
-END_ACCOUNT = 400
+END_ACCOUNT = 65
 MIN_BET = 0.1  # ETH
 MAX_BET = 20.0  # ETH
 DELAY_BETWEEN_VOTES = 0.5  # seconds
@@ -111,10 +111,10 @@ def main():
     # Connect to Ethereum
     w3 = Web3(Web3.HTTPProvider(RPC_URL))
     if not w3.is_connected():
-        print("❌ Cannot connect to Ethereum node")
+        print("X Cannot connect to Ethereum node")
         return
 
-    print("✅ Connected to Ethereum node")
+    print("✓ Connected to Ethereum node")
 
     # Load contract
     with open(CONTRACT_ADDRESS_FILE, 'r') as f:
@@ -128,21 +128,21 @@ def main():
         abi=contract_abi
     )
 
-    print(f"✅ Contract loaded: {contract_address}")
+    print(f"✓ Contract loaded: {contract_address}")
 
     # Load master key
     master_public_key = load_master_key()
-    print("✅ Master key loaded")
+    print("✓ Master key loaded")
 
     # Get accounts
     accounts = w3.eth.accounts
 
     if len(accounts) < END_ACCOUNT + 1:
         print(
-            f"❌ Not enough accounts. Available: {len(accounts)}, Needed: {END_ACCOUNT + 1}")
+            f"X Not enough accounts. Available: {len(accounts)}, Needed: {END_ACCOUNT + 1}")
         return
 
-    print(f"✅ Found {len(accounts)} accounts\n")
+    print(f"✓ Found {len(accounts)} accounts\n")
 
     # Confirm before starting
     confirm = input("Start automated voting? (y/n): ")
@@ -202,14 +202,14 @@ def main():
             )
 
             if success:
-                print(f"           ✅ Success! Tx: {tx_hash[:20]}...")
+                print(f"           ✓ Success! Tx: {tx_hash[:20]}...")
                 success_count += 1
             else:
-                print(f"           ❌ Transaction failed")
+                print(f"           X Transaction failed")
                 fail_count += 1
 
         except Exception as e:
-            print(f"           ❌ Error: {e}")
+            print(f"           X Error: {e}")
             fail_count += 1
 
         # Wait before next vote (except for last one)
@@ -226,9 +226,9 @@ def main():
     print("="*70)
     print("VOTING COMPLETE!")
     print("="*70)
-    print(f"✅ Successful votes: {success_count}")
-    print(f"❌ Failed votes: {fail_count}")
-    print(f"📊 Total votes: {total_votes}")
+    print(f"✓ Successful votes: {success_count}")
+    print(f"X Failed votes: {fail_count}")
+    print(f"> Total votes: {total_votes}")
     print()
     print("Vote Distribution:")
     print(
@@ -243,7 +243,7 @@ def main():
         f"   Option B: {total_b_funds:.4f} ETH ({total_b_funds/total_funds*100:.1f}%)")
     print(f"   Total: {total_funds:.4f} ETH")
     print()
-    print("⏳ Wait a few seconds for the listener to process all votes...")
+    print("> Wait a few seconds for the listener to process all votes...")
     print("   Then check the frontend to see the updated ratios!")
     print("="*70 + "\n")
 
