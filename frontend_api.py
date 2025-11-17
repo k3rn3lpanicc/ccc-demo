@@ -1,6 +1,3 @@
-"""
-FastAPI server to provide data and voting endpoints for the frontend
-"""
 import json
 import os
 import base64
@@ -13,7 +10,6 @@ from umbral import PublicKey, encrypt
 
 app = FastAPI()
 
-# Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -52,7 +48,6 @@ def aes_encrypt(key: bytes, plaintext: bytes):
 
 @app.get("/api/history")
 def get_history():
-    """Get a_ratio history"""
     try:
         with open(HISTORY_FILE, 'r') as f:
             history = json.load(f)
@@ -65,7 +60,6 @@ def get_history():
 
 @app.get("/api/accounts")
 def get_accounts():
-    """Get available Hardhat accounts"""
     try:
         w3 = Web3(Web3.HTTPProvider(RPC_URL))
         if not w3.is_connected():
@@ -75,7 +69,6 @@ def get_accounts():
         accounts = w3.eth.accounts
         account_list = []
 
-        # Skip first account (admin/deployer), get up to 50 accounts
         for i, acc in enumerate(accounts[1:51], 1):
             balance = w3.from_wei(w3.eth.get_balance(acc), 'ether')
             account_list.append({
@@ -91,7 +84,6 @@ def get_accounts():
 
 @app.get("/api/contract/status")
 def get_contract_status():
-    """Get contract status and info"""
     try:
         w3 = Web3(Web3.HTTPProvider(RPC_URL))
         if not w3.is_connected():
@@ -130,7 +122,6 @@ class VoteRequest(BaseModel):
 
 @app.post("/api/vote")
 def submit_vote(vote: VoteRequest):
-    """Submit a vote to the contract"""
     try:
         if vote.betOn not in ["A", "B"]:
             raise HTTPException(
@@ -153,7 +144,6 @@ def submit_vote(vote: VoteRequest):
         voter = accounts[vote.accountIndex]
         bet_amount_wei = w3.to_wei(vote.betAmount, 'ether')
 
-        # Load contract
         with open(CONTRACT_ADDRESS_FILE, 'r') as f:
             contract_address = json.load(f)['address']
 
@@ -165,7 +155,6 @@ def submit_vote(vote: VoteRequest):
             abi=contract_abi
         )
 
-        # Encrypt vote
         vote_data = {
             voter: {
                 "bet_amount": bet_amount_wei,
@@ -184,7 +173,6 @@ def submit_vote(vote: VoteRequest):
         encrypted_sym_key_b64 = b64e(encrypted_sym_key)
         capsule_b64 = b64e(bytes(capsule))
 
-        # Submit to contract
         tx_hash = contract.functions.vote(
             vote_ciphertext_b64,
             encrypted_sym_key_b64,
@@ -213,7 +201,6 @@ def submit_vote(vote: VoteRequest):
 
 @app.post("/api/finish")
 def finish_betting():
-    """Finish betting period"""
     try:
         w3 = Web3(Web3.HTTPProvider(RPC_URL))
         if not w3.is_connected():
@@ -260,7 +247,6 @@ class CalculatePayoutsRequest(BaseModel):
 
 @app.post("/api/calculate-payouts")
 def calculate_payouts(req: CalculatePayoutsRequest):
-    """Calculate payouts via TEE"""
     try:
         import requests as req_lib
 
@@ -282,7 +268,6 @@ def calculate_payouts(req: CalculatePayoutsRequest):
 
         current_state = contract.functions.getCurrentState().call()
 
-        # Call TEE
         response = req_lib.post(
             "http://127.0.0.1:8000/finish",
             json={
@@ -316,7 +301,6 @@ class SetPayoutsRequest(BaseModel):
 
 @app.post("/api/set-payouts")
 def set_payouts(req: SetPayoutsRequest):
-    """Set payouts in contract with batching to avoid gas limits"""
     try:
         w3 = Web3(Web3.HTTPProvider(RPC_URL))
         if not w3.is_connected():
@@ -337,12 +321,11 @@ def set_payouts(req: SetPayoutsRequest):
         accounts = w3.eth.accounts
         admin = accounts[0]
 
-        payouts = filter(req.payouts, lambda p: p['payout'] != 0)
+        payouts = [p for p in req.payouts if p['payout'] > 0]
 
         all_addresses = [payout['wallet'] for payout in payouts]
         all_amounts = [payout['payout'] for payout in payouts]
 
-        # Batch payouts to avoid gas limits (50 per batch)
         BATCH_SIZE = 20
         total_batches = (len(all_addresses) + BATCH_SIZE - 1) // BATCH_SIZE
 

@@ -5,17 +5,11 @@ from typing import List
 import random
 
 STATE_FILE = "../kd/umbral_state.json"
-# Base port for first node; can override via env
 BASE_PORT = int(os.getenv("BASE_PORT", "5000"))
-# How many nodes to start; can override via env (defaults to all kfrags)
 NUM_NODES_ENV = os.getenv("NUM_NODES", 7)
 
 
 def load_kfrags_from_state(state_file: str) -> List[str]:
-    """
-    Load base64-encoded verified kfrags from umbral_state.json.
-    We assume data["kfrags"] is a list of base64 strings, exactly as you saved.
-    """
     with open(state_file, "r") as f:
         data = json.load(f)
     kfrags = data.get("kfrags", [])
@@ -40,7 +34,6 @@ def main():
     print(f"Starting {num_nodes} nodes from {len(kfrags)} available kfrags...")
     processes = []
 
-    # select 2 indexes randomly to corrupt them
     corrupt_indexes = random.sample(range(num_nodes), 2)
 
     for idx in range(num_nodes):
@@ -53,9 +46,6 @@ def main():
         if idx in corrupt_indexes:
             env["CORRUPTED"] = "1"
 
-        # Adjust "node:app" to match your FastAPI file and app variable name.
-        # If your file is named `node.py` and app is `app`, this is correct.
-        
         cmd = [
             "uvicorn",
             "node:app",

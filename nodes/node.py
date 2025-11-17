@@ -74,7 +74,7 @@ class UserSubmitVoteRequest(BaseModel):
     encrypted_vote: str
     encrypted_sym_key: str
     capsule: str
-    current_state: str  # Current encrypted state from contract
+    current_state: str
 
 
 @app.post("/submit_vote")

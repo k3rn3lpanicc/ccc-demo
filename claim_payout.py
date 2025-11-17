@@ -48,7 +48,7 @@ def main():
     print("-"*60)
 
     claimable_accounts = []
-    for i, acc in enumerate(accounts[1:11], 1):  # Check first 10 accounts
+    for i, acc in enumerate(accounts[1:100], 1):  # Check first 10 accounts
         try:
             payout = contract.functions.getPayoutAmount(acc).call()
             has_claimed = contract.functions.hasClaimedPayout(acc).call()
@@ -126,7 +126,7 @@ def main():
             balance_change = balance_after - balance_before
 
             print(
-                f"\n📊 Account balance after: {w3.from_wei(balance_after, 'ether')} ETH")
+                f"\n> Account balance after: {w3.from_wei(balance_after, 'ether')} ETH")
 
             # Handle negative balance change (due to gas)
             if balance_change < 0:

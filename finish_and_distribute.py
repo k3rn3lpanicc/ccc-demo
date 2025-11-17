@@ -1,11 +1,7 @@
-"""
-Finish betting and distribute funds via smart contract
-"""
 import json
 import requests
 from web3 import Web3
 
-# Configuration
 RPC_URL = "http://127.0.0.1:8545"
 CONTRACT_ADDRESS_FILE = "contract-address.json"
 CONTRACT_ABI_FILE = "contract-abi.json"
@@ -17,15 +13,11 @@ def main():
     print("FINISH BETTING AND DISTRIBUTE FUNDS")
     print("="*60)
 
-    # Connect to Ethereum
     w3 = Web3(Web3.HTTPProvider(RPC_URL))
     if not w3.is_connected():
         print("X Cannot connect to Ethereum node")
         return
 
-    print(f"✓ Connected to Ethereum node")
-
-    # Load contract
     with open(CONTRACT_ADDRESS_FILE, 'r') as f:
         contract_address = json.load(f)['address']
 
@@ -39,17 +31,15 @@ def main():
 
     print(f"✓ Contract loaded: {contract_address}")
 
-    # Get admin account
     accounts = w3.eth.accounts
-    admin = accounts[0]  # First account is admin
+    admin = accounts[0]
     print(f"   Admin: {admin}")
 
-    # Check contract status
     status = contract.functions.status().call()
     status_names = ["Active", "Finished", "PayoutsSet"]
     print(f"   Current status: {status_names[status]}")
 
-    if status != 0:  # Not Active
+    if status != 0:
         print("\n!!  Betting is not active!")
         if status == 1:
             print("   Betting already finished, proceeding to payouts...")
@@ -57,7 +47,6 @@ def main():
             print("   Payouts already set!")
             return
 
-    # Step 1: Finish betting (if not finished)
     if status == 0:
         print("\n" + "="*60)
         print("STEP 1: FINISH BETTING")
@@ -88,7 +77,6 @@ def main():
             print(f"X Error finishing betting: {e}")
             return
 
-    # Step 2: Get current encrypted state
     print("\n" + "="*60)
     print("STEP 2: CALCULATE PAYOUTS")
     print("="*60)
@@ -96,14 +84,12 @@ def main():
     current_state = contract.functions.getCurrentState().call()
     print(f"   Current state length: {len(current_state)} chars")
 
-    # Get winning option
     winning_option = input("\nEnter winning option (A/B): ").upper()
 
     if winning_option not in ["A", "B"]:
         print("X Invalid option")
         return
 
-    # Call TEE to calculate payouts
     print(f"\n📡 Calling TEE to calculate payouts for winner: {winning_option}")
 
     try:
@@ -129,7 +115,6 @@ def main():
 
         payouts = result['payouts']
 
-        # Display payouts
         print("\n> Payout breakdown:")
         print("-"*60)
         for payout_info in payouts:
@@ -146,7 +131,6 @@ def main():
         traceback.print_exc()
         return
 
-    # Step 3: Set payouts in contract
     print("\n" + "="*60)
     print("STEP 3: SET PAYOUTS IN CONTRACT")
     print("="*60)
@@ -156,14 +140,14 @@ def main():
         print("Cancelled.")
         return
 
-    # Prepare arrays for contract
+    payouts = [p for p in payouts if p['payout'] > 0]
+
     all_addresses = [payout['wallet'] for payout in payouts]
-    all_amounts = [payout['payout'] for payout in payouts]  # Already in wei
+    all_amounts = [payout['payout'] for payout in payouts]
 
     print(f"\n> Setting payouts for {len(all_addresses)} wallets...")
 
-    # Batch payouts to avoid gas limits (50 per batch)
-    BATCH_SIZE = 50
+    BATCH_SIZE = 20
     total_batches = (len(all_addresses) + BATCH_SIZE - 1) // BATCH_SIZE
 
     print(
@@ -206,7 +190,6 @@ def main():
         traceback.print_exc()
         return
 
-    # Step 4: Summary
     print("\n" + "="*60)
     print("✓ PROCESS COMPLETE!")
     print("="*60)
@@ -215,7 +198,6 @@ def main():
     print("\nOr use the claim script:")
     print("  python claim_payout.py")
 
-    # Show contract balance
     balance = w3.eth.get_balance(contract.address)
     print(f"\nContract balance: {w3.from_wei(balance, 'ether')} ETH")
 
