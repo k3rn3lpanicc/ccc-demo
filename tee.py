@@ -86,10 +86,10 @@ def sign_state_transition(prev_state: str, new_state: str) -> str:
         [prev_state, new_state]
     )
     
-    # Sign the hash
-    signed_message = tee_account.signHash(message_hash)
+    # Sign the hash using unsafe_sign_hash (signs raw hash without prefix)
+    signed_message = tee_account.unsafe_sign_hash(message_hash)
     
-    # Return signature as hex string (with v, r, s components)
+    # Return signature as hex string
     signature = signed_message.signature.hex()
     
     return signature
