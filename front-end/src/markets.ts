@@ -259,6 +259,9 @@ document.getElementById('confirm-login')!.addEventListener('click', async () => 
 	}
 });
 
+// Set initial click handler for admin button
+document.getElementById('admin-login-btn')!.onclick = showLoginModal;
+
 // Initial load
 checkAdminStatus();
 loadMarkets();
