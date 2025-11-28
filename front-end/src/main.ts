@@ -5,6 +5,10 @@ Chart.register(...registerables);
 
 const API_BASE = 'http://127.0.0.1:3001/api';
 
+// Get marketId from URL parameter
+const urlParams = new URLSearchParams(window.location.search);
+const MARKET_ID = parseInt(urlParams.get('marketId') || '0');
+
 interface HistoryEntry {
 	timestamp: string;
 	a_ratio: number;
@@ -18,43 +22,47 @@ interface Account {
 	balance: number;
 }
 
-interface ContractStatus {
-	address: string;
+interface Market {
+	marketId: number;
+	title: string;
+	description: string;
+	status: number;
 	bettingFinished: boolean;
-	balance: number;
+	createdAt: number;
+	totalVolume: number;
 }
 
 let chart: Chart | null = null;
 let lastHistoryLength = 0;
+let currentMarket: Market | null = null;
 
-// Load contract status
-async function loadContractStatus() {
+// Load market details
+async function loadMarketDetails() {
 	try {
-		const response = await fetch(`${API_BASE}/contract/status`);
+		const response = await fetch(`${API_BASE}/markets/${MARKET_ID}`);
 		const data = await response.json();
 
-		if (data.success) {
-			const status: ContractStatus = data;
-			document.getElementById('contract-address')!.textContent =
-				status.address.slice(0, 10) + '...' + status.address.slice(-8);
-			document.getElementById('contract-balance')!.textContent = `${status.balance.toFixed(
-				2
-			)} USDC`;
-			document.getElementById('betting-status')!.textContent = status.bettingFinished
-				? '🔴 Finished'
-				: '🟢 Active';
+		if (data.success && data.market) {
+			currentMarket = data.market;
+			
+			// Update page with market info
+			document.getElementById('contract-address')!.textContent = `Market #${MARKET_ID}`;
+			document.getElementById('contract-balance')!.textContent = `${data.market.totalVolume.toFixed(2)} USDC`;
+			
+			const statusText = data.market.bettingFinished ? '🔴 Finished' : '🟢 Active';
+			document.getElementById('betting-status')!.textContent = statusText;
 
 			// Disable voting if finished
 			const voteButton = document.getElementById('vote-button') as HTMLButtonElement;
 			const finishButton = document.getElementById('finish-button') as HTMLButtonElement;
-			if (status.bettingFinished) {
+			if (data.market.bettingFinished) {
 				voteButton.disabled = true;
 				voteButton.textContent = 'Betting Closed';
 				finishButton.disabled = true;
 			}
 		}
 	} catch (error) {
-		console.error('Failed to load contract status:', error);
+		console.error('Failed to load market:', error);
 		document.getElementById('contract-address')!.textContent = 'Error loading';
 		document.getElementById('contract-balance')!.textContent = 'Error loading';
 		document.getElementById('betting-status')!.textContent = 'Error loading';
@@ -91,7 +99,7 @@ async function loadAccounts() {
 // Load and display chart
 async function loadChart() {
 	try {
-		const response = await fetch(`${API_BASE}/history`);
+		const response = await fetch(`${API_BASE}/history/${MARKET_ID}`);
 		const data = await response.json();
 
 		if (data.success && data.history.length > 0) {
@@ -267,6 +275,7 @@ async function handleVoteSubmit(event: Event) {
 				'Content-Type': 'application/json',
 			},
 			body: JSON.stringify({
+				marketId: MARKET_ID,
 				accountIndex,
 				betAmount,
 				betOn,
@@ -286,7 +295,7 @@ async function handleVoteSubmit(event: Event) {
 
 			// Reload data after a delay
 			setTimeout(() => {
-				loadContractStatus();
+				loadMarketDetails();
 				loadChart();
 			}, 3000);
 		} else {
@@ -337,6 +346,7 @@ async function handleFinishPrediction() {
 			const finishResponse = await fetch(`${API_BASE}/finish`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ marketId: MARKET_ID }),
 			});
 
 			const finishData = await finishResponse.json();
@@ -350,7 +360,7 @@ async function handleFinishPrediction() {
 			const payoutsResponse = await fetch(`${API_BASE}/calculate-payouts`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ winningOption }),
+				body: JSON.stringify({ marketId: MARKET_ID, winningOption }),
 			});
 
 			const payoutsData = await payoutsResponse.json();
@@ -364,7 +374,7 @@ async function handleFinishPrediction() {
 			const setPayoutsResponse = await fetch(`${API_BASE}/set-payouts`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ payouts: payoutsData.payouts }),
+				body: JSON.stringify({ marketId: MARKET_ID, payouts: payoutsData.payouts }),
 			});
 
 			const setPayoutsData = await setPayoutsResponse.json();
@@ -403,7 +413,16 @@ async function handleFinishPrediction() {
 
 // Initialize
 async function init() {
-	await loadContractStatus();
+	// Add back button
+	const header = document.querySelector('.header')!;
+	const backButton = document.createElement('a');
+	backButton.href = '/markets.html';
+	backButton.className = 'back-button';
+	backButton.innerHTML = '← Back to Markets';
+	backButton.style.cssText = 'display: block; margin-bottom: 10px; color: var(--color-primary); text-decoration: none;';
+	header.insertBefore(backButton, header.firstChild);
+
+	await loadMarketDetails();
 	await loadAccounts();
 	await loadChart();
 
@@ -417,7 +436,7 @@ async function init() {
 
 	// Poll for updates every 5 seconds
 	setInterval(() => {
-		loadContractStatus();
+		loadMarketDetails();
 		loadChart();
 	}, 5000);
 }
