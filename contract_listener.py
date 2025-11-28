@@ -13,7 +13,6 @@ CONTRACT_ABI_FILE = "contract-abi.json"
 RPC_URL = "http://127.0.0.1:8545"
 NODE_URL = "http://127.0.0.1:5000/submit_vote"
 POLL_INTERVAL = 2  # seconds
-HISTORY_FILE = "a_ratio_history.json"
 
 
 def load_contract():
@@ -28,39 +27,47 @@ def load_contract():
     return contract_address, contract_abi
 
 
-def load_history():
-    """Load a_ratio history from file"""
+def load_history(market_id):
+    """Load a_ratio history from file for a specific market"""
+    history_file = f"a_ratio_history_{market_id}.json"
     try:
-        with open(HISTORY_FILE, 'r') as f:
+        with open(history_file, 'r') as f:
             return json.load(f)
     except FileNotFoundError:
         return []
 
 
-def save_history(history):
-    """Save a_ratio history to file"""
-    with open(HISTORY_FILE, 'w') as f:
+def save_history(market_id, history):
+    """Save a_ratio history to file for a specific market"""
+    history_file = f"a_ratio_history_{market_id}.json"
+    with open(history_file, 'w') as f:
         json.dump(history, f, indent=2)
 
 
-def process_vote_event(event, contract, w3, history):
+def process_vote_event(event, contract, w3, market_histories):
     """Process a VoteSubmitted event"""
     print("\n" + "="*60)
     print(f"> New Vote Event Detected!")
     print("="*60)
 
+    market_id = event['args']['marketId']
     voter = event['args']['voter']
     encrypted_vote = event['args']['encryptedVote']
     encrypted_sym_key = event['args']['encryptedSymKey']
     capsule = event['args']['capsule']
     amount = event['args']['amount']
 
+    print(f"Market ID: {market_id}")
     print(f"Voter: {voter}")
     print(f"Amount: {w3.from_wei(amount, 'ether')} USDC")
     print(f"Block: {event['blockNumber']}")
 
-    # Get current state from contract
-    current_state = contract.functions.getCurrentState().call()
+    # Get current state from contract for this market
+    current_state = contract.functions.getCurrentState(market_id).call()
+    
+    # Load market-specific history
+    if market_id not in market_histories:
+        market_histories[market_id] = load_history(market_id)
 
     print("\n> Submitting to nodes for processing...")
 
@@ -93,14 +100,14 @@ def process_vote_event(event, contract, w3, history):
                     if a_funds_ratio is not None:
                         print(
                             f"[:] A-funds-ratio revealed: {a_funds_ratio:.2%}")
-                    # Save to history
-                    history.append({
+                    # Save to market-specific history
+                    market_histories[market_id].append({
                         "timestamp": datetime.now().isoformat(),
                         "a_ratio": a_ratio,
                         "a_funds_ratio": a_funds_ratio,
                         "total_votes": total_votes
                     })
-                    save_history(history)
+                    save_history(market_id, market_histories[market_id])
                 else:
                     print("> A-ratio: No votes yet")
             else:
@@ -113,7 +120,7 @@ def process_vote_event(event, contract, w3, history):
             # In production, this should be an authorized oracle account
             accounts = w3.eth.accounts
             if accounts:
-                tx_hash = contract.functions.updateState(new_state).transact({
+                tx_hash = contract.functions.updateState(market_id, new_state).transact({
                     'from': accounts[0]
                 })
                 receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
@@ -159,16 +166,16 @@ def main():
         )
         print(f"✓ Contract loaded: {contract_address}")
         print(f"   Admin: {contract.functions.admin().call()}")
-        print(
-            f"   Current state length: {len(contract.functions.getCurrentState().call())} chars")
+        market_count = contract.functions.marketCount().call()
+        print(f"   Total markets: {market_count}")
     except Exception as e:
         print(f"X Failed to load contract: {e}")
         print("   Make sure contract is deployed and ABI is exported")
         return
 
-    # Load history
-    history = load_history()
-    print(f"   Loaded {len(history)} historical a_ratio entries")
+    # Load histories for all markets
+    market_histories = {}
+    print(f"   Loading historical data for markets...")
 
     # Start listening for events
     print("\n> Listening for VoteSubmitted events...")
@@ -210,7 +217,7 @@ def main():
                     for event in events:
                         tx_hash = event['transactionHash'].hex()
                         if tx_hash not in processed_tx_hashes:
-                            process_vote_event(event, contract, w3, history)
+                            process_vote_event(event, contract, w3, market_histories)
                             processed_tx_hashes.add(tx_hash)
                 except Exception as e:
                     print(
@@ -236,7 +243,7 @@ def main():
                                                 )
                                                 if tx_hash not in processed_tx_hashes:
                                                     process_vote_event(
-                                                        event, contract, w3, history)
+                                                        event, contract, w3, market_histories)
                                                     processed_tx_hashes.add(
                                                         tx_hash)
                                             except Exception as e3:
