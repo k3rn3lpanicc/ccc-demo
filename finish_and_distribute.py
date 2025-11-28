@@ -164,7 +164,7 @@ def main():
     payouts = [p for p in payouts if p['payout'] > 0]
 
     all_addresses = [payout['wallet'] for payout in payouts]
-    all_amounts = [payout['payout'] for payout in payouts]
+    all_amounts = [int(payout['payout']) for payout in payouts]  # Convert to int
 
     print(f"\n> Setting payouts for {len(all_addresses)} wallets...")
 

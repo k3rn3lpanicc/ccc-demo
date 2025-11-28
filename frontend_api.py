@@ -476,7 +476,7 @@ def set_payouts(req: SetPayoutsRequest):
         payouts = [p for p in req.payouts if p['payout'] > 0]
 
         all_addresses = [payout['wallet'] for payout in payouts]
-        all_amounts = [payout['payout'] for payout in payouts]
+        all_amounts = [int(payout['payout']) for payout in payouts]  # Convert to int
 
         BATCH_SIZE = 20
         total_batches = (len(all_addresses) + BATCH_SIZE - 1) // BATCH_SIZE
