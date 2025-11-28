@@ -56,7 +56,7 @@ def process_vote_event(event, contract, w3, history):
     amount = event['args']['amount']
 
     print(f"Voter: {voter}")
-    print(f"Amount: {w3.from_wei(amount, 'ether')} ETH")
+    print(f"Amount: {w3.from_wei(amount, 'ether')} USDC")
     print(f"Block: {event['blockNumber']}")
 
     # Get current state from contract

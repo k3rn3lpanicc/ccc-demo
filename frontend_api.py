@@ -21,6 +21,7 @@ app.add_middleware(
 RPC_URL = "http://127.0.0.1:8545"
 CONTRACT_ADDRESS_FILE = "contract-address.json"
 CONTRACT_ABI_FILE = "contract-abi.json"
+TOKEN_ABI_FILE = "token-abi.json"
 STATE_FILE = "./kd/umbral_state.json"
 HISTORY_FILE = "a_ratio_history.json"
 
@@ -66,15 +67,26 @@ def get_accounts():
             raise HTTPException(
                 status_code=500, detail="Cannot connect to Ethereum node")
 
+        with open(CONTRACT_ADDRESS_FILE, 'r') as f:
+            token_address = json.load(f)['tokenAddress']
+
+        with open(TOKEN_ABI_FILE, 'r') as f:
+            token_abi = json.load(f)
+
+        token = w3.eth.contract(
+            address=Web3.to_checksum_address(token_address),
+            abi=token_abi
+        )
+
         accounts = w3.eth.accounts
         account_list = []
 
         for i, acc in enumerate(accounts[1:51], 1):
-            balance = w3.from_wei(w3.eth.get_balance(acc), 'ether')
+            balance = token.functions.balanceOf(acc).call()
             account_list.append({
                 "index": i,
                 "address": acc,
-                "balance": float(balance)
+                "balance": float(w3.from_wei(balance, 'ether'))
             })
 
         return {"success": True, "accounts": account_list}
@@ -102,7 +114,7 @@ def get_contract_status():
         )
 
         betting_finished = contract.functions.bettingFinished().call()
-        contract_balance = w3.eth.get_balance(contract_address)
+        contract_balance = contract.functions.getContractBalance().call()
 
         return {
             "success": True,
@@ -142,22 +154,32 @@ def submit_vote(vote: VoteRequest):
                 status_code=400, detail="Invalid account index")
 
         voter = accounts[vote.accountIndex]
-        bet_amount_wei = w3.to_wei(vote.betAmount, 'ether')
+        bet_amount = w3.to_wei(vote.betAmount, 'ether')
 
         with open(CONTRACT_ADDRESS_FILE, 'r') as f:
-            contract_address = json.load(f)['address']
+            contract_info = json.load(f)
+            contract_address = contract_info['address']
+            token_address = contract_info['tokenAddress']
 
         with open(CONTRACT_ABI_FILE, 'r') as f:
             contract_abi = json.load(f)
+
+        with open(TOKEN_ABI_FILE, 'r') as f:
+            token_abi = json.load(f)
 
         contract = w3.eth.contract(
             address=Web3.to_checksum_address(contract_address),
             abi=contract_abi
         )
 
+        token = w3.eth.contract(
+            address=Web3.to_checksum_address(token_address),
+            abi=token_abi
+        )
+
         vote_data = {
             voter: {
-                "bet_amount": bet_amount_wei,
+                "bet_amount": bet_amount,
                 "bet_on": vote.betOn
             }
         }
@@ -173,13 +195,20 @@ def submit_vote(vote: VoteRequest):
         encrypted_sym_key_b64 = b64e(encrypted_sym_key)
         capsule_b64 = b64e(bytes(capsule))
 
+        # Approve token transfer
+        approve_tx = token.functions.approve(contract_address, bet_amount).transact({
+            'from': voter,
+            'gas': 100000
+        })
+        w3.eth.wait_for_transaction_receipt(approve_tx)
+
         tx_hash = contract.functions.vote(
             vote_ciphertext_b64,
             encrypted_sym_key_b64,
-            capsule_b64
+            capsule_b64,
+            bet_amount
         ).transact({
             'from': voter,
-            'value': bet_amount_wei,
             'gas': 3000000
         })
 
