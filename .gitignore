@@ -16,3 +16,4 @@ a_ratio_history.json
 /nodes/__pycache__
 a_ratio_history*
 /artifacts
+kd/tee_signing_key.json
