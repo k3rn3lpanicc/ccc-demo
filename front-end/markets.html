@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Private Market Prediction - Markets</title>
+</head>
+
+<body>
+  <div id="app">
+    <header class="header">
+      <h1>Private Market Prediction</h1>
+      <p class="subtitle">Browse and participate in prediction markets</p>
+      <div class="admin-section">
+        <button id="admin-login-btn" class="btn-secondary">Admin Login</button>
+      </div>
+    </header>
+
+    <div class="container">
+      <!-- Admin Login Modal -->
+      <div id="admin-login-modal" class="modal-overlay">
+        <div class="modal">
+          <h2>🔐 Admin Login</h2>
+          <div class="modal-content">
+            <div class="form-group">
+              <label for="admin-address">Admin Address:</label>
+              <input type="text" id="admin-address" placeholder="0x..." required />
+            </div>
+            <div id="login-result" class="vote-result"></div>
+          </div>
+          <div class="modal-buttons">
+            <button id="confirm-login" class="btn-primary">
+              Login
+            </button>
+            <button id="cancel-login" class="btn-danger">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Create Market Section (Admin Only) -->
+      <div class="card create-market-card" id="create-market-section" style="display: none;">
+        <h2>Create New Market</h2>
+        <form id="create-market-form">
+          <div class="form-group">
+            <label for="market-title">Market Title:</label>
+            <input type="text" id="market-title" placeholder="e.g., Will Bitcoin reach $100k by 2025?" required />
+          </div>
+
+          <div class="form-group">
+            <label for="market-description">Description:</label>
+            <textarea id="market-description" rows="3" placeholder="Provide details about the prediction..." required></textarea>
+          </div>
+
+          <button type="submit" id="create-market-button" class="btn-primary">
+            Create Market
+          </button>
+
+          <div id="create-result" class="vote-result"></div>
+        </form>
+      </div>
+
+      <!-- Markets Grid -->
+      <div class="markets-section">
+        <h2>Active Markets</h2>
+        <div id="markets-grid" class="markets-grid">
+          <div class="loading">Loading markets...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/markets.ts"></script>
+</body>
+
+</html>

@@ -49,21 +49,41 @@ def main():
     print(f"✓ Contract loaded: {contract_address}")
     print(f"✓ Token loaded: {token_address}")
 
+    # List markets
+    market_count = contract.functions.marketCount().call()
+    print(f"\n📊 Available Markets ({market_count}):")
+    
+    for i in range(market_count):
+        market = contract.functions.getMarket(i).call()
+        title = market[1]
+        status = market[4]
+        status_text = ["Active", "Finished", "Payouts Set"][status]
+        print(f"  {i}. {title} - {status_text}")
+    
+    market_choice = input(f"\nSelect market to claim from (0-{market_count-1}): ")
+    try:
+        market_id = int(market_choice)
+        if market_id < 0 or market_id >= market_count:
+            raise ValueError()
+    except:
+        print("Invalid market, using market 0")
+        market_id = 0
+
     # Get accounts
     accounts = w3.eth.accounts
     if len(accounts) < 2:
         print("X Not enough accounts")
         return
 
-    # Show accounts with payouts
-    print("\nAccounts with payouts:")
+    # Show accounts with payouts for this market
+    print(f"\nAccounts with payouts for Market #{market_id}:")
     print("-"*60)
 
     claimable_accounts = []
-    for i, acc in enumerate(accounts[1:100], 1):  # Check first 10 accounts
+    for i, acc in enumerate(accounts[1:100], 1):
         try:
-            payout = contract.functions.getPayoutAmount(acc).call()
-            has_claimed = contract.functions.hasClaimedPayout(acc).call()
+            payout = contract.functions.getPayoutAmount(market_id, acc).call()
+            has_claimed = contract.functions.hasClaimedPayout(market_id, acc).call()
 
             if payout > 0:
                 status = "✓ Claimed" if has_claimed else "💰 Available"
@@ -120,7 +140,7 @@ def main():
     print("\n> Claiming payout...")
 
     try:
-        tx_hash = contract.functions.claimPayout().transact({
+        tx_hash = contract.functions.claimPayout(market_id).transact({
             'from': claimer,
             'gas': 500000
         })

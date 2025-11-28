@@ -31,16 +31,37 @@ def main():
 
     print(f"✓ Contract loaded: {contract_address}")
 
+    # List markets
+    market_count = contract.functions.marketCount().call()
+    print(f"\n📊 Available Markets ({market_count}):")
+    
+    for i in range(market_count):
+        market = contract.functions.getMarket(i).call()
+        title = market[1]
+        status = market[4]
+        status_text = ["Active", "Finished", "Payouts Set"][status]
+        print(f"  {i}. {title} - {status_text}")
+    
+    market_choice = input(f"\nSelect market to finish (0-{market_count-1}): ")
+    try:
+        market_id = int(market_choice)
+        if market_id < 0 or market_id >= market_count:
+            raise ValueError()
+    except:
+        print("Invalid market, using market 0")
+        market_id = 0
+
     accounts = w3.eth.accounts
     admin = accounts[0]
     print(f"   Admin: {admin}")
 
-    status = contract.functions.status().call()
+    market = contract.functions.getMarket(market_id).call()
+    status = market[4]
     status_names = ["Active", "Finished", "PayoutsSet"]
-    print(f"   Current status: {status_names[status]}")
+    print(f"   Market status: {status_names[status]}")
 
     if status != 0:
-        print("\n!!  Betting is not active!")
+        print("\n!!  Betting is not active for this market!")
         if status == 1:
             print("   Betting already finished, proceeding to payouts...")
         elif status == 2:
@@ -57,9 +78,9 @@ def main():
             print("Cancelled.")
             return
 
-        print("\n> Calling contract.finishBetting()...")
+        print(f"\n> Calling contract.finishBetting({market_id})...")
         try:
-            tx_hash = contract.functions.finishBetting().transact({
+            tx_hash = contract.functions.finishBetting(market_id).transact({
                 'from': admin,
                 'gas': 1000000
             })
@@ -81,7 +102,7 @@ def main():
     print("STEP 2: CALCULATE PAYOUTS")
     print("="*60)
 
-    current_state = contract.functions.getCurrentState().call()
+    current_state = contract.functions.getCurrentState(market_id).call()
     print(f"   Current state length: {len(current_state)} chars")
 
     winning_option = input("\nEnter winning option (A/B): ").upper()
@@ -143,7 +164,7 @@ def main():
     payouts = [p for p in payouts if p['payout'] > 0]
 
     all_addresses = [payout['wallet'] for payout in payouts]
-    all_amounts = [payout['payout'] for payout in payouts]
+    all_amounts = [int(payout['payout']) for payout in payouts]  # Convert to int
 
     print(f"\n> Setting payouts for {len(all_addresses)} wallets...")
 
@@ -164,6 +185,7 @@ def main():
                 f"\n   Batch {batch_num}/{total_batches}: Setting {len(batch_addresses)} payouts...")
 
             tx_hash = contract.functions.setPayouts(
+                market_id,
                 batch_addresses,
                 batch_amounts,
                 is_last_batch
