@@ -86,8 +86,12 @@ def sign_state_transition(prev_state: str, new_state: str) -> str:
         [prev_state, new_state]
     )
     
-    # Sign the hash using unsafe_sign_hash (signs raw hash without prefix)
-    signed_message = tee_account.unsafe_sign_hash(message_hash)
+    # Create Ethereum signed message (adds "\x19Ethereum Signed Message:\n32" prefix)
+    # This matches what toEthSignedMessageHash() expects in Solidity
+    eth_message = encode_defunct(primitive=message_hash)
+    
+    # Sign the message
+    signed_message = tee_account.sign_message(eth_message)
     
     # Return signature as hex string with 0x prefix
     signature = signed_message.signature.hex()
