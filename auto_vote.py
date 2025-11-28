@@ -17,6 +17,7 @@ TOKEN_ABI_FILE = "token-abi.json"
 STATE_FILE = "./kd/umbral_state.json"
 
 # Configuration
+MARKET_ID = 0  # Which market to vote on
 START_ACCOUNT = 45
 END_ACCOUNT = 65
 MIN_BET = 100  # USDC
@@ -87,6 +88,7 @@ def submit_vote(w3, contract, token, voter_address, bet_amount_usdc, bet_on, mas
 
     # Submit to contract
     tx_hash = contract.functions.vote(
+        MARKET_ID,
         vote_ciphertext_b64,
         encrypted_sym_key_b64,
         capsule_b64,
@@ -104,6 +106,7 @@ def main():
     print("\n" + "="*70)
     print("AUTOMATED VOTING SCRIPT")
     print("="*70)
+    print(f"Market ID: {MARKET_ID}")
     print(f"Accounts: {START_ACCOUNT} to {END_ACCOUNT}")
     print(f"Bet range: {MIN_BET} to {MAX_BET} USDC")
     print(f"Delay between votes: {DELAY_BETWEEN_VOTES} seconds")

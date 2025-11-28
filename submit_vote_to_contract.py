@@ -70,6 +70,26 @@ def main():
     print(f"✓ Contract loaded: {contract_address}")
     print(f"✓ Token loaded: {token_address}")
 
+    # List available markets
+    market_count = contract.functions.marketCount().call()
+    print(f"\n📊 Available Markets ({market_count}):")
+    
+    for i in range(market_count):
+        market = contract.functions.getMarket(i).call()
+        title = market[1]
+        status = market[4]
+        status_text = ["Active", "Finished", "Payouts Set"][status]
+        print(f"  {i}. {title} - {status_text}")
+    
+    market_choice = input(f"\nSelect market (0-{market_count-1}): ")
+    try:
+        market_id = int(market_choice)
+        if market_id < 0 or market_id >= market_count:
+            raise ValueError()
+    except:
+        print("Invalid market, using market 0")
+        market_id = 0
+
     accounts = w3.eth.accounts
     if len(accounts) < 2:
         print("X Not enough accounts")
@@ -113,7 +133,7 @@ def main():
     }
 
     print(
-        f"\n> Creating vote: {w3.from_wei(bet_amount, 'ether')} USDC on {bet_on}")
+        f"\n> Creating vote for Market #{market_id}: {w3.from_wei(bet_amount, 'ether')} USDC on {bet_on}")
     master_public_key = load_master_key()
     plaintext = json.dumps(vote_data).encode("utf-8")
     sym_key = os.urandom(32)
@@ -137,6 +157,7 @@ def main():
 
     try:
         tx_hash = contract.functions.vote(
+            market_id,
             vote_ciphertext_b64,
             encrypted_sym_key_b64,
             capsule_b64,
