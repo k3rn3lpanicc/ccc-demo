@@ -176,6 +176,7 @@ def get_market(marketId: int):
 class CreateMarketRequest(BaseModel):
     title: str
     description: str
+    adminAddress: str
 
 
 @app.post("/api/markets/create")
@@ -199,6 +200,13 @@ def create_market(req: CreateMarketRequest):
             abi=contract_abi
         )
 
+        # Verify admin
+        admin_address = contract.functions.admin().call()
+        input_address = Web3.to_checksum_address(req.adminAddress)
+        
+        if admin_address.lower() != input_address.lower():
+            raise HTTPException(status_code=403, detail="Not authorized: Only admin can create markets")
+
         # Get initial encrypted state from TEE
         response = req_lib.get("http://127.0.0.1:8000/initialize_state", timeout=10)
         response.raise_for_status()
@@ -209,16 +217,13 @@ def create_market(req: CreateMarketRequest):
 
         initial_state = result["encrypted_state"]
 
-        # Create market
-        accounts = w3.eth.accounts
-        admin = accounts[0]
-
+        # Create market (use the verified admin address)
         tx_hash = contract.functions.createMarket(
             req.title,
             req.description,
             initial_state
         ).transact({
-            'from': admin,
+            'from': input_address,
             'gas': 2000000
         })
 
@@ -237,6 +242,72 @@ def create_market(req: CreateMarketRequest):
         else:
             raise HTTPException(status_code=500, detail="Transaction failed")
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/status")
+def get_admin_status():
+    try:
+        w3 = Web3(Web3.HTTPProvider(RPC_URL))
+        if not w3.is_connected():
+            raise HTTPException(
+                status_code=500, detail="Cannot connect to Ethereum node")
+
+        with open(CONTRACT_ADDRESS_FILE, 'r') as f:
+            contract_address = json.load(f)['address']
+
+        with open(CONTRACT_ABI_FILE, 'r') as f:
+            contract_abi = json.load(f)
+
+        contract = w3.eth.contract(
+            address=Web3.to_checksum_address(contract_address),
+            abi=contract_abi
+        )
+
+        admin_address = contract.functions.admin().call()
+
+        return {
+            "success": True,
+            "adminAddress": admin_address
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class VerifyAdminRequest(BaseModel):
+    address: str
+
+
+@app.post("/api/admin/verify")
+def verify_admin(req: VerifyAdminRequest):
+    try:
+        w3 = Web3(Web3.HTTPProvider(RPC_URL))
+        if not w3.is_connected():
+            raise HTTPException(
+                status_code=500, detail="Cannot connect to Ethereum node")
+
+        with open(CONTRACT_ADDRESS_FILE, 'r') as f:
+            contract_address = json.load(f)['address']
+
+        with open(CONTRACT_ABI_FILE, 'r') as f:
+            contract_abi = json.load(f)
+
+        contract = w3.eth.contract(
+            address=Web3.to_checksum_address(contract_address),
+            abi=contract_abi
+        )
+
+        admin_address = contract.functions.admin().call()
+        input_address = Web3.to_checksum_address(req.address)
+
+        is_admin = admin_address.lower() == input_address.lower()
+
+        return {
+            "success": True,
+            "isAdmin": is_admin,
+            "adminAddress": admin_address if is_admin else None
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
