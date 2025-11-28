@@ -6,7 +6,7 @@ A privacy-preserving betting system that uses threshold encryption and mock Trus
 
 This is a proof-of-concept betting platform where:
 
-- **Users vote privately** on options A or B with ETH stakes via a web interface
+- **Users vote privately** on options A or B with USDC tokens via a web interface
 - **Individual votes remain encrypted** throughout the voting period
 - **Vote distribution is revealed periodically** (every 5 votes) to prevent identification
 - **Two metrics tracked**: A-ratio (vote count) and A-funds-ratio (funds amount)
@@ -48,7 +48,7 @@ User Vote → Smart Contract → Event Listener → Nodes (Threshold Re-encrypti
 
 4. **Smart Contract**
    - Holds encrypted state on-chain
-   - Manages ETH deposits and payouts
+   - Manages ERC20 token (USDC) deposits and payouts
    - Enforces admin controls for finishing and settlement
 
 ### Encryption Flow
@@ -60,7 +60,8 @@ User Vote → Smart Contract → Event Listener → Nodes (Threshold Re-encrypti
 2. Generate random symmetric key (AES-256)
 3. Encrypt vote with AES-GCM
 4. Encrypt symmetric key with master public key (Umbral)
-5. Submit to smart contract with ETH stake
+5. Approve USDC token transfer to contract
+6. Submit to smart contract with USDC amount
 ```
 
 #### Vote Processing
@@ -101,7 +102,7 @@ User Vote → Smart Contract → Event Listener → Nodes (Threshold Re-encrypti
 4. TEE calculates proportional payouts:
    winner_payout = (winner_stake / total_winner_stakes) × total_pool
 5. Admin calls setPayouts() with calculated amounts
-6. Winners call claimPayout() to withdraw their ETH
+6. Winners call claimPayout() to withdraw their USDC
 ```
 
 ## Prerequisites
@@ -228,7 +229,7 @@ npm run node
 **What this does:**
 
 - Starts Hardhat local Ethereum network
-- Provides 20 test accounts with 10,000 ETH each
+- Provides 100 test accounts with 10,000 ETH each (for gas)
 - Network runs on `http://127.0.0.1:8545`
 
 **Keep this terminal running.**
@@ -243,26 +244,38 @@ npx hardhat run scripts/deploy-with-tee.js --network localhost
 
 **What this does:**
 
-1. Calls TEE's `/initialize_state` endpoint
-2. Gets empty encrypted state
-3. Deploys `PrivateBetting.sol` contract
-4. Initializes contract with encrypted state
-5. Saves contract address to `contract-address.json`
+1. Deploys MockUSDC token contract
+2. Mints 10,000 USDC to test accounts 1-50
+3. Calls TEE's `/initialize_state` endpoint
+4. Gets empty encrypted state
+5. Deploys `PrivateBetting.sol` contract with token address
+6. Initializes contract with encrypted state
+7. Saves contract and token addresses to `contract-address.json`
 
 **Expected Output:**
 
 ```
-Deploying PrivateBetting contract with TEE initialization...
+Deploying MockUSDC and PrivateBetting contracts with TEE initialization...
 
-📡 Requesting initial state from TEE...
-✅ Received encrypted state from TEE
+> Deploying MockUSDC token...
+✓ MockUSDC deployed to: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+   Deployer balance: 1000000.0 USDC
+
+> Minting USDC to test accounts (1-50)...
+   Minted to 10 accounts...
+   Minted to 20 accounts...
+   ...
+✓ Minted 10,000 USDC to 50 test accounts
+
+> Requesting initial state from TEE...
+✓ Received encrypted state from TEE
    State length: 228 chars
 
-📝 Deploying contract...
-✅ PrivateBetting deployed to: 0x5FbDB2315678afecb367f032d93F642f64180aa3
-   Admin address: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+> Deploying PrivateBetting contract...
+✓ PrivateBetting deployed to: 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
+   Token address: 0x5FbDB2315678afecb367f032d93F642f64180aa3
 
-✅ Contract address saved to contract-address.json
+✓ Contract and token addresses saved to contract-address.json
 ```
 
 ### Step 6: Start Event Listener
@@ -356,7 +369,7 @@ Open your browser to `http://localhost:3000`
 
 1. Open `http://localhost:3000` in your browser
 2. Select an account from the dropdown
-3. Enter bet amount (e.g., 0.1 ETH)
+3. Enter bet amount (e.g., 100 USDC)
 4. Choose Option A or B
 5. Click "Submit Vote"
 6. Watch the chart update every 5 votes!
@@ -373,20 +386,23 @@ python submit_vote_to_contract.py
 
 ```
 Available accounts:
-  1. 0x70997970...dc79C8 (10000.00 ETH)
-  2. 0x3C44CdDd...07eAeE (10000.00 ETH)
-  3. 0x90F79bf6...93b906 (10000.00 ETH)
+  1. 0x70997970...dc79C8 (10000.00 USDC)
+  2. 0x3C44CdDd...07eAeE (10000.00 USDC)
+  3. 0x90F79bf6...93b906 (10000.00 USDC)
   ...
 
 Select account (1-5): 1
 
-Bet amount in ETH (e.g., 0.1): 0.1
+Bet amount in USDC (e.g., 100): 100
 Bet on (A/B): A
 
-📝 Creating vote: 0.1 ETH on A
+📝 Creating vote: 100 USDC on A
 ✅ Vote encrypted
 
-📤 Submitting to contract with 0.1 ETH...
+> Approving token transfer...
+✓ Token approved
+
+📤 Submitting to contract with 100 USDC...
    Transaction sent: 0x123abc...
    Waiting for confirmation...
 ✅ Vote submitted successfully!
@@ -400,9 +416,10 @@ Bet on (A/B): A
 
 1. Vote is encrypted with AES-GCM using random symmetric key
 2. Symmetric key is encrypted with master public key (Umbral)
-3. Transaction sent to contract with 0.1 ETH
-4. Contract emits `VoteSubmitted` event
-5. **Listener processes automatically** (check listener terminal)
+3. USDC tokens approved for contract to spend
+4. Transaction sent to contract with token amount
+5. Contract emits `VoteSubmitted` event
+6. **Listener processes automatically** (check listener terminal)
 
 **Listener output:**
 
@@ -411,7 +428,7 @@ Bet on (A/B): A
 📥 New Vote Event Detected!
 ============================================================
 Voter: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
-Amount: 0.1 ETH
+Amount: 100 USDC
 Block: 6
 
 📤 Submitting to node for processing...
@@ -437,10 +454,10 @@ Total votes: 1
 
 ```bash
 # Run multiple times with different accounts
-python submit_vote_to_contract.py  # Account 2, 0.2 ETH, B
-python submit_vote_to_contract.py  # Account 3, 0.15 ETH, A
-python submit_vote_to_contract.py  # Account 4, 0.3 ETH, B
-python submit_vote_to_contract.py  # Account 5, 0.05 ETH, A
+python submit_vote_to_contract.py  # Account 2, 200 USDC, B
+python submit_vote_to_contract.py  # Account 3, 150 USDC, A
+python submit_vote_to_contract.py  # Account 4, 300 USDC, B
+python submit_vote_to_contract.py  # Account 5, 50 USDC, A
 ```
 
 **After 5th vote:**
@@ -460,20 +477,22 @@ python auto_vote.py
 
 **What this does:**
 
-- Automatically votes from accounts 10-49 (40 accounts)
-- Random amounts between 0.1-10 ETH
+- Automatically votes from accounts 45-65 (configurable)
+- Random amounts between 100-10,000 USDC
 - Strategic distribution:
   - 65% vote for A (but with smaller bets)
   - 35% vote for B (but with larger bets)
   - Creates interesting divergence between vote ratio and funds ratio!
-- 2 second delay between votes
+- 0.5 second delay between votes
 - Shows statistics at the end
 
 **Configuration** (edit `auto_vote.py`):
 
 ```python
-START_ACCOUNT = 10
-END_ACCOUNT = 49
+START_ACCOUNT = 45
+END_ACCOUNT = 65
+MIN_BET = 100  # USDC
+MAX_BET = 10000  # USDC
 A_VOTE_PROBABILITY = 0.65  # 65% vote A
 A_HIGH_BET_PROBABILITY = 0.3  # 30% of A voters bet high
 B_HIGH_BET_PROBABILITY = 0.7  # 70% of B voters bet high
@@ -575,7 +594,7 @@ Winners can now claim their payouts by calling:
 Or use the claim script:
   python claim_payout.py
 
-Contract balance: 0.75 ETH
+Contract balance: 750 USDC
 ```
 
 **Payout Calculation:**
@@ -587,17 +606,17 @@ Contract balance: 0.75 ETH
 **Example:**
 
 ```
-Total pool: 0.75 ETH
+Total pool: 750 USDC
 Winners (voted A):
-  - Account 1: 0.1 ETH stake
-  - Account 3: 0.2 ETH stake
-  - Account 5: 0.15 ETH stake
-  Total winner stakes: 0.45 ETH
+  - Account 1: 100 USDC stake
+  - Account 3: 200 USDC stake
+  - Account 5: 150 USDC stake
+  Total winner stakes: 450 USDC
 
 Payouts:
-  - Account 1: (0.1/0.45) × 0.75 = 0.1666 ETH
-  - Account 3: (0.2/0.45) × 0.75 = 0.3333 ETH
-  - Account 5: (0.15/0.45) × 0.75 = 0.25 ETH
+  - Account 1: (100/450) × 750 = 166.67 USDC
+  - Account 3: (200/450) × 750 = 333.33 USDC
+  - Account 5: (150/450) × 750 = 250.00 USDC
 ```
 
 ### Step 12: Claim Winnings
@@ -614,21 +633,22 @@ CLAIM PAYOUT FROM CONTRACT
 ============================================================
 ✅ Connected to Ethereum node
 ✅ Contract loaded: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+✅ Token loaded: 0x5FbDB2315678afecb367f032d93F642f64180aa3
 
 Accounts with payouts:
 ------------------------------------------------------------
   1. 0x70997970...dc79C8
-      Payout: 0.1666 ETH - 💰 Available
+      Payout: 166.67 USDC - 💰 Available
   2. 0x3C44CdDd...07eAeE
-      Payout: 0.3333 ETH - 💰 Available
+      Payout: 333.33 USDC - 💰 Available
   3. 0x90F79bf6...93b906
-      Payout: 0.25 ETH - 💰 Available
+      Payout: 250.00 USDC - 💰 Available
 ------------------------------------------------------------
 
 Select account to claim (1-3): 1
 
-📊 Account balance before: 9999.8999 ETH
-   Payout amount: 0.1666 ETH
+📊 Account balance before: 9900.00 USDC
+   Payout amount: 166.67 USDC
 
 Claim payout? (y/n): y
 
@@ -638,8 +658,8 @@ Claim payout? (y/n): y
    Block: 13
    Gas used: 57135
 
-📊 Account balance after: 10000.0665 ETH
-   Net change: +0.1665 ETH (payout minus gas)
+📊 Account balance after: 10066.67 USDC
+   Net change: +166.67 USDC
 ```
 
 **Run again for other winners:**
@@ -661,7 +681,8 @@ private-market-prediction/
 │   ├── node.py                     # Individual node implementation
 │   └── run_nodes.py               # Starts 7 threshold nodes
 ├── contracts/
-│   └── PrivateBetting.sol         # Solidity smart contract (with batching)
+│   ├── PrivateBetting.sol         # Solidity smart contract (ERC20)
+│   └── MockUSDC.sol               # Test ERC20 token
 ├── scripts/
 │   ├── deploy-with-tee.js         # Deploy with TEE initialization
 │   ├── export-abi.js              # Export contract ABI
@@ -680,20 +701,31 @@ private-market-prediction/
 ├── finish_and_distribute.py       # Admin settlement with batching
 ├── claim_payout.py                # Winner claim interface
 ├── a_ratio_history.json           # Auto-generated ratio history
+├── contract-abi.json              # Contract ABI
+├── token-abi.json                 # Token ABI
 ├── hardhat.config.js              # Hardhat configuration
 ├── package.json                    # Node.js dependencies
 ├── README.md                       # This file
+├── ERC20_MIGRATION.md             # ERC20 migration guide
 └── FRONTEND_SETUP.md              # Detailed frontend guide
 ```
 
-## New Features
+## Features
+
+### ERC20 Token Support
+
+- **Uses USDC tokens** instead of native ETH for betting
+- **MockUSDC contract** for testing (ERC20 with 18 decimals)
+- **Automatic token approval** in all Python scripts and frontend
+- **10,000 USDC minted** to 50 test accounts on deployment
+- **Token balance tracking** throughout the system
 
 ### Web Frontend
 
 - **Dark theme** with teal blue and cyan accents
 - **Dual-metric visualization**: A-ratio (vote %) and A-funds-ratio (funds %)
 - **Real-time chart** with Chart.js showing historical trends
-- **Account dropdown** supporting up to 50 Hardhat accounts
+- **Account dropdown** supporting up to 50 Hardhat accounts with USDC balances
 - **Admin controls** for finishing predictions and distributing payouts
 - **Responsive design** with full-width chart display
 
@@ -711,6 +743,7 @@ private-market-prediction/
   - Different betting strategies (A voters bet small, B voters bet large)
   - Creates interesting divergence between the two metrics
   - Adjustable parameters for custom scenarios
+  - Bet ranges: 100-10,000 USDC
 
 ## Security Considerations
 
@@ -719,13 +752,15 @@ private-market-prediction/
 - ✅ Threshold encryption protects against node compromise
 - ✅ Forward secrecy prevents historical decryption
 - ✅ Byzantine fault tolerance (handles 3 corrupt nodes)
-- ✅ Smart contract enforces rules and holds funds
+- ✅ Smart contract enforces rules and holds ERC20 tokens
 - ✅ Batched payouts prevent gas limit issues
+- ✅ ERC20 token approval mechanism for secure transfers
 - ⚠️  TEE is mocked (no hardware isolation)
 - ⚠️  No signature verification on TEE responses
 - ⚠️  Anyone can call `updateState()` (should be oracle-only)
 - ⚠️  Local development network (no real stakes)
 - ⚠️  Frontend uses predefined accounts (no wallet integration)
+- ⚠️  MockUSDC for testing only (not production-ready)
 
 ### Production Requirements
 
@@ -749,7 +784,12 @@ private-market-prediction/
    - Then mainnet with audits
    - Distributed node operators
 
-5. **Additional Features**
+5. **Token Integration**
+   - Use production ERC20 tokens (real USDC with 6 decimals)
+   - Proper token allowance handling
+   - Token balance checks before voting
+
+6. **Additional Features**
    - Time-based betting windows
    - Minimum/maximum bet limits
    - Emergency pause mechanism
@@ -780,16 +820,18 @@ npx hardhat run scripts/test-contract.js --network localhost
 
 ### What to Expect
 
-- ✅ Votes submitted via web UI or CLI
+- ✅ MockUSDC token deployed with 10,000 USDC per test account
+- ✅ Votes submitted via web UI or CLI with USDC tokens
+- ✅ Automatic token approval before voting
 - ✅ Listener processes votes automatically
 - ✅ A-ratio and A-funds-ratio revealed every 5 votes
 - ✅ Real-time chart updates showing both metrics
 - ✅ Divergence between vote count and funds (with auto_vote.py)
 - ✅ Corrupt nodes don't break the system
 - ✅ Automatic batching handles 100+ voters
-- ✅ Winners can claim their proportional share
+- ✅ Winners can claim their proportional USDC share
 - ✅ Losers get 0
-- ✅ Contract balance depletes as winners claim
+- ✅ Contract token balance depletes as winners claim
 
 ## ⚠️ Disclaimer
 
