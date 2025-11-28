@@ -89,8 +89,10 @@ def sign_state_transition(prev_state: str, new_state: str) -> str:
     # Sign the hash using unsafe_sign_hash (signs raw hash without prefix)
     signed_message = tee_account.unsafe_sign_hash(message_hash)
     
-    # Return signature as hex string
+    # Return signature as hex string with 0x prefix
     signature = signed_message.signature.hex()
+    if not signature.startswith('0x'):
+        signature = '0x' + signature
     
     return signature
 

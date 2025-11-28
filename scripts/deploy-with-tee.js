@@ -85,11 +85,17 @@ async function main() {
 	
 	// Create a default market for testing
 	console.log('\n> Creating default test market...');
+	
+	// Ensure signature has 0x prefix for ethers.js
+	const signatureBytes = initialSignature.startsWith('0x') 
+		? initialSignature 
+		: '0x' + initialSignature;
+	
 	const createMarketTx = await contract.createMarket(
 		'Will ETH reach $10,000 by end of 2025?',
 		'A prediction market on whether Ethereum will reach $10,000 USD by December 31, 2025.',
 		initialState,
-		initialSignature
+		signatureBytes
 	);
 	await createMarketTx.wait();
 	console.log('✓ Default market created (ID: 0)\n');
