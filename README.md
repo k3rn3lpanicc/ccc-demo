@@ -44,6 +44,8 @@ User Vote → Smart Contract → Event Listener → Nodes (Threshold Re-encrypti
    - In production, this would run in a hardware-isolated enclave
    - Holds the only private key that can decrypt votes
    - Processes votes and updates encrypted state
+   - **Signs all state transitions** with Ethereum private key
+   - Generates persistent signing key on first run
 
 3. **Forward Secrecy**
    - Each state update uses a new symmetric key
@@ -54,6 +56,8 @@ User Vote → Smart Contract → Event Listener → Nodes (Threshold Re-encrypti
    - Holds encrypted state on-chain
    - Manages ERC20 token (USDC) deposits and payouts
    - Enforces admin controls for finishing and settlement
+   - **Verifies TEE signatures** on all state updates
+   - Stores TEE address and rejects unsigned state transitions
 
 ### Encryption Flow
 
@@ -84,9 +88,11 @@ User Vote → Smart Contract → Event Listener → Nodes (Threshold Re-encrypti
 11. TEE generates NEW symmetric key
 12. TEE encrypts new state with new key
 13. TEE encrypts new key with its own public key
-14. TEE returns new encrypted state to node
-15. Node returns result to listener
-16. Listener updates contract with new encrypted state
+14. TEE signs (prevState, newState) with Ethereum private key
+15. TEE returns new encrypted state + signature to node
+16. Node returns result to listener
+17. Listener updates contract with new encrypted state + signature
+18. Contract verifies TEE signature before accepting state update
 ```
 
 #### Privacy Protection
@@ -142,17 +148,25 @@ python -m uvicorn tee:app
 ```
 Generated new TEE secret key
 TEE Public Key: AzXtAf1xt7gAv8IMcXHWjkUYt0M8SfNrqD7ykWu5HWpg
+Generated new TEE signing key, saved to ./kd/tee_signing_key.json
+TEE Signing Address: 0x25fb079F3A0f60333cdB3BC2dE7Af6d7B7EF5DA0
+⚠️  IMPORTANT: Set this address as teeAddress in your smart contract!
+
 INFO:     Uvicorn running on http://127.0.0.1:8000
 ```
 
-**⚠️ IMPORTANT**: Copy the TEE Public Key for the next step.
+**⚠️ IMPORTANT**: 
+- Copy the **TEE Public Key** for the next step (key distribution)
+- Copy the **TEE Signing Address** - the deployment script will use this automatically
 
 **About the TEE:**
 
 - This is a **mock TEE** implemented as a simple FastAPI service
 - In production, this would run in a hardware-isolated Trusted Execution Environment (Intel SGX, AMD SEV, ARM TrustZone)
-- The TEE generates a random secret key on startup
-- This key is used to decrypt the final encrypted state containing votes
+- The TEE generates two keys on startup:
+  - **Umbral secret key**: Used to decrypt the final encrypted state containing votes
+  - **Ethereum signing key**: Used to sign all state transitions for verification by the smart contract
+- Keys are persisted to disk for consistency across restarts
 
 ### Step 2: Generate Master Keys and Key Fragments
 
@@ -250,11 +264,12 @@ npx hardhat run scripts/deploy-with-tee.js --network localhost
 
 1. Deploys MockUSDC token contract
 2. Mints 10,000 USDC to test accounts 1-50
-3. Calls TEE's `/initialize_state` endpoint
-4. Gets empty encrypted state
-5. Deploys `PrivateBetting.sol` multi-market contract with token address
-6. Creates a default test market ("Will ETH reach $10,000 by end of 2025?")
-7. Saves contract, token addresses, and deployer (admin) address to `contract-address.json`
+3. Gets TEE signing address from `/tee_address` endpoint
+4. Calls TEE's `/initialize_state` endpoint
+5. Gets empty encrypted state + signature
+6. Deploys `PrivateBetting.sol` multi-market contract with token address and TEE address
+7. Creates a default test market with initial state + signature
+8. Saves contract, token, TEE addresses, and deployer (admin) address to `contract-address.json`
 
 **Expected Output:**
 
@@ -271,20 +286,28 @@ Deploying MockUSDC and PrivateBetting contracts with TEE initialization...
    ...
 ✓ Minted 10,000 USDC to 50 test accounts
 
+> Getting TEE signing address...
+✓ TEE Address: 0x25fb079F3A0f60333cdB3BC2dE7Af6d7B7EF5DA0
+
 > Requesting initial state from TEE...
 ✓ Received encrypted state from TEE
    State length: 228 chars
+   Signature: 0x0ef238776cb0bb34...
 
 > Deploying PrivateBetting contract...
 ✓ PrivateBetting deployed to: 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
    Token address: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+   TEE address: 0x25fb079F3A0f60333cdB3BC2dE7Af6d7B7EF5DA0
 
 > Creating default test market...
 ✓ Default market created (ID: 0)
 
 ✓ Contract and token addresses saved to contract-address.json
    Admin address: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+   TEE address: 0x25fb079F3A0f60333cdB3BC2dE7Af6d7B7EF5DA0
 ```
+
+**Note**: The TEE address is stored in the contract and used to verify all state transitions.
 
 ### Step 6: Start Event Listener
 
@@ -723,10 +746,11 @@ python claim_payout.py  # Claim for account 3
 
 ```
 private-market-prediction/
-├── tee.py                          # Mock TEE service (FastAPI)
+├── tee.py                          # Mock TEE service (FastAPI) with signature
 ├── kd/
 │   ├── kd.py                       # Key distribution setup
-│   └── umbral_state.json          # Generated master keys & kfrags
+│   ├── umbral_state.json          # Generated master keys & kfrags
+│   └── tee_signing_key.json       # TEE Ethereum signing key (auto-generated)
 ├── nodes/
 │   ├── node.py                     # Individual node implementation
 │   └── run_nodes.py               # Starts 7 threshold nodes
@@ -820,6 +844,16 @@ private-market-prediction/
 - **Market creation API** - Protected endpoint with 403 for non-admins
 - **Visual indicators** - Admin status shown in header when logged in
 
+### TEE Signature Verification
+
+- **Cryptographic proof** - TEE signs every state transition with Ethereum private key
+- **On-chain verification** - Smart contract verifies ECDSA signatures before updating state
+- **Signature format** - Uses standard Ethereum signed message format (`\x19Ethereum Signed Message:\n32`)
+- **State transition integrity** - Signature covers (prevState, newState) pair
+- **TEE address registration** - Contract stores TEE address and rejects unauthorized updates
+- **Persistent keys** - TEE signing key saved to `kd/tee_signing_key.json` for consistency
+- **No trusted oracle** - Contract cryptographically verifies TEE involvement
+
 ## Security Considerations
 
 ### Current Implementation (Development)
@@ -830,9 +864,11 @@ private-market-prediction/
 - ✅ Smart contract enforces rules and holds ERC20 tokens
 - ✅ Batched payouts prevent gas limit issues
 - ✅ ERC20 token approval mechanism for secure transfers
+- ✅ **TEE signature verification** - All state updates cryptographically verified
+- ✅ **ECDSA signature checking** - Contract verifies TEE signed each transition
+- ✅ **TEE address enforcement** - Only valid TEE signatures accepted
 - ⚠️  TEE is mocked (no hardware isolation)
-- ⚠️  No signature verification on TEE responses
-- ⚠️  Anyone can call `updateState()` (should be oracle-only)
+- ⚠️  Anyone can relay updates (but must have valid TEE signature)
 - ⚠️  Local development network (no real stakes)
 - ⚠️  Frontend uses predefined accounts (no wallet integration)
 - ⚠️  MockUSDC for testing only (not production-ready)
@@ -843,11 +879,13 @@ private-market-prediction/
    - Intel SGX, AMD SEV, or ARM TrustZone
    - Remote attestation for verification
    - Sealed storage for keys
+   - Hardware-protected signing key
 
-2. **Oracle Authorization**
-   - Restrict `updateState()` to authorized oracles
+2. **Enhanced Security**
+   - Restrict state relay to authorized oracles (optional with signatures)
    - Multi-signature for admin functions
    - Time locks for critical operations
+   - Rate limiting for state updates
 
 3. **Economic Security**
    - Node operator bonds
@@ -922,6 +960,8 @@ npx hardhat run scripts/test-contract.js --network localhost
 - ✅ Losers get 0
 - ✅ Contract token balance depletes as winners claim
 - ✅ Multiple markets can run simultaneously
+- ✅ TEE signatures verified on-chain for all state transitions
+- ✅ Cryptographic proof of TEE involvement in every update
 
 ## ⚠️ Disclaimer
 
