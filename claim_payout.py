@@ -8,6 +8,7 @@ from web3 import Web3
 RPC_URL = "http://127.0.0.1:8545"
 CONTRACT_ADDRESS_FILE = "contract-address.json"
 CONTRACT_ABI_FILE = "contract-abi.json"
+TOKEN_ABI_FILE = "token-abi.json"
 
 
 def main():
@@ -25,17 +26,28 @@ def main():
 
     # Load contract
     with open(CONTRACT_ADDRESS_FILE, 'r') as f:
-        contract_address = json.load(f)['address']
+        contract_info = json.load(f)
+        contract_address = contract_info['address']
+        token_address = contract_info['tokenAddress']
 
     with open(CONTRACT_ABI_FILE, 'r') as f:
         contract_abi = json.load(f)
+
+    with open(TOKEN_ABI_FILE, 'r') as f:
+        token_abi = json.load(f)
 
     contract = w3.eth.contract(
         address=Web3.to_checksum_address(contract_address),
         abi=contract_abi
     )
 
+    token = w3.eth.contract(
+        address=Web3.to_checksum_address(token_address),
+        abi=token_abi
+    )
+
     print(f"✓ Contract loaded: {contract_address}")
+    print(f"✓ Token loaded: {token_address}")
 
     # Get accounts
     accounts = w3.eth.accounts
@@ -55,9 +67,9 @@ def main():
 
             if payout > 0:
                 status = "✓ Claimed" if has_claimed else "💰 Available"
-                payout_eth = w3.from_wei(payout, 'ether')
+                payout_usdc = w3.from_wei(payout, 'ether')
                 print(f"  {i}. {acc[:10]}...{acc[-6:]}")
-                print(f"      Payout: {payout_eth} ETH - {status}")
+                print(f"      Payout: {payout_usdc} USDC - {status}")
 
                 if not has_claimed:
                     claimable_accounts.append((i, acc, payout))
@@ -93,10 +105,10 @@ def main():
         return
 
     # Show balance before
-    balance_before = w3.eth.get_balance(claimer)
+    balance_before = token.functions.balanceOf(claimer).call()
     print(
-        f"\n> Account balance before: {w3.from_wei(balance_before, 'ether')} ETH")
-    print(f"   Payout amount: {w3.from_wei(payout_amount, 'ether')} ETH")
+        f"\n> Account balance before: {w3.from_wei(balance_before, 'ether')} USDC")
+    print(f"   Payout amount: {w3.from_wei(payout_amount, 'ether')} USDC")
 
     # Confirm
     confirm = input("\nClaim payout? (y/n): ")
@@ -122,19 +134,13 @@ def main():
             print(f"   Gas used: {receipt['gasUsed']}")
 
             # Show balance after
-            balance_after = w3.eth.get_balance(claimer)
+            balance_after = token.functions.balanceOf(claimer).call()
             balance_change = balance_after - balance_before
 
             print(
-                f"\n> Account balance after: {w3.from_wei(balance_after, 'ether')} ETH")
-
-            # Handle negative balance change (due to gas)
-            if balance_change < 0:
-                print(
-                    f"   Net change: -{w3.from_wei(abs(balance_change), 'ether')} ETH (gas cost exceeds payout)")
-            else:
-                print(
-                    f"   Net change: +{w3.from_wei(balance_change, 'ether')} ETH (payout minus gas)")
+                f"\n> Account balance after: {w3.from_wei(balance_after, 'ether')} USDC")
+            print(
+                f"   Net change: +{w3.from_wei(balance_change, 'ether')} USDC")
         else:
             print(f"X Transaction failed")
 
