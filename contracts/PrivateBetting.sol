@@ -2,9 +2,15 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 contract PrivateBetting {
+    using ECDSA for bytes32;
+    using MessageHashUtils for bytes32;
+    
     address public admin;
+    address public teeAddress;
     IERC20 public token;
     uint256 public marketCount;
 
@@ -78,6 +84,11 @@ contract PrivateBetting {
         require(msg.sender == admin, "Only admin can call this");
         _;
     }
+    
+    modifier onlyTEE() {
+        require(msg.sender == teeAddress, "Only TEE can call this");
+        _;
+    }
 
     modifier marketExists(uint256 marketId) {
         require(marketId < marketCount, "Market does not exist");
@@ -100,10 +111,18 @@ contract PrivateBetting {
         _;
     }
 
-    constructor(address _tokenAddress) {
+    constructor(address _tokenAddress, address _teeAddress) {
         admin = msg.sender;
         token = IERC20(_tokenAddress);
+        teeAddress = _teeAddress;
         marketCount = 0;
+    }
+    
+    /**
+     * @dev Update TEE address (admin only)
+     */
+    function setTEEAddress(address _teeAddress) external onlyAdmin {
+        teeAddress = _teeAddress;
     }
 
     /**
@@ -111,12 +130,20 @@ contract PrivateBetting {
      * @param title Market title
      * @param description Market description
      * @param initialEncryptedState Initial encrypted state from TEE
+     * @param signature TEE signature on ("", initialEncryptedState)
      */
     function createMarket(
         string memory title,
         string memory description,
-        string memory initialEncryptedState
+        string memory initialEncryptedState,
+        bytes memory signature
     ) external onlyAdmin returns (uint256) {
+        // Verify the TEE signature on (empty -> initialState)
+        require(
+            verifyTEESignature("", initialEncryptedState, signature),
+            "Invalid TEE signature for initial state"
+        );
+        
         uint256 marketId = marketCount;
         
         markets[marketId] = Market({
@@ -191,17 +218,52 @@ contract PrivateBetting {
     }
 
     /**
+     * @dev Verify TEE signature on state transition
+     * @param prevState Previous encrypted state
+     * @param newState New encrypted state
+     * @param signature Signature from TEE
+     * @return bool True if signature is valid
+     */
+    function verifyTEESignature(
+        string memory prevState,
+        string memory newState,
+        bytes memory signature
+    ) public view returns (bool) {
+        // Create the same message hash that TEE signed
+        bytes32 messageHash = keccak256(abi.encodePacked(prevState, newState));
+        
+        // Recover the signer address from the signature
+        address signer = messageHash.toEthSignedMessageHash().recover(signature);
+        
+        // Check if the signer is the TEE address
+        return signer == teeAddress;
+    }
+    
+    /**
      * @dev Update the encrypted state (called by oracle/nodes after processing vote)
      * @param marketId Market ID
      * @param newEncryptedState The new encrypted state from TEE
+     * @param signature Signature from TEE proving state transition
      */
-    function updateState(uint256 marketId, string memory newEncryptedState)
+    function updateState(
+        uint256 marketId, 
+        string memory newEncryptedState,
+        bytes memory signature
+    )
         external
         marketExists(marketId)
         bettingActive(marketId)
     {
-        // In production, you'd want to verify the caller is authorized (oracle/node)
-        // For now, anyone can update during active betting
+        // Get the previous state
+        string memory prevState = markets[marketId].encryptedState;
+        
+        // Verify the TEE signature on (prevState, newState)
+        require(
+            verifyTEESignature(prevState, newEncryptedState, signature),
+            "Invalid TEE signature"
+        );
+        
+        // Update the state
         markets[marketId].encryptedState = newEncryptedState;
 
         emit StateUpdated(marketId, newEncryptedState);

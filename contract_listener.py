@@ -87,6 +87,7 @@ def process_vote_event(event, contract, w3, market_histories):
 
         if result.get("success"):
             new_state = result.get("new_encrypted_state")
+            signature = result.get("signature")
             print("✓ Vote processed successfully!")
             total_votes = result.get('total_votes', 0)
             print(f"Total votes: {total_votes}")
@@ -120,12 +121,16 @@ def process_vote_event(event, contract, w3, market_histories):
             # In production, this should be an authorized oracle account
             accounts = w3.eth.accounts
             if accounts:
-                tx_hash = contract.functions.updateState(market_id, new_state).transact({
+                # Convert signature to bytes
+                sig_bytes = bytes.fromhex(signature[2:] if signature.startswith('0x') else signature)
+                
+                tx_hash = contract.functions.updateState(market_id, new_state, sig_bytes).transact({
                     'from': accounts[0]
                 })
                 receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
                 print(
                     f"✓ State updated in contract (tx: {receipt.transactionHash.hex()[:10]}...)")
+                print(f"✓ TEE signature verified on-chain")
             else:
                 print("!!  No accounts available to update state")
 
