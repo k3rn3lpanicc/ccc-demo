@@ -1,20 +1,24 @@
 # Private Market Prediction System
 
-A privacy-preserving betting system that uses threshold encryption and mock Trusted Execution Environment (TEE) to enable confidential voting and transparent settlement on Ethereum.
+A privacy-preserving, multi-market prediction platform that uses threshold encryption and mock Trusted Execution Environment (TEE) to enable confidential voting and transparent settlement on Ethereum.
 
 ## What is This?
 
-This is a proof-of-concept betting platform where:
+This is a proof-of-concept prediction market platform where:
 
+- **Multiple markets** can exist simultaneously in one smart contract
+- **Admin creates markets** with custom titles and descriptions (Polymarket-style)
+- **Users browse markets** on a landing page and select which to participate in
 - **Users vote privately** on options A or B with USDC tokens via a web interface
 - **Individual votes remain encrypted** throughout the voting period
 - **Vote distribution is revealed periodically** (every 5 votes) to prevent identification
 - **Two metrics tracked**: A-ratio (vote count) and A-funds-ratio (funds amount)
-- **Real-time visualization** shows both metrics on an interactive chart
+- **Real-time visualization** shows both metrics on an interactive chart per market
 - **TEE processes all votes** in a confidential manner
 - **Smart contract holds funds** and enforces settlement rules
 - **Winners are paid proportionally** to their stakes
 - **Automated voting** script available for testing with multiple accounts
+- **Admin authentication** required for market creation
 
 ## Cryptographic Scheme
 
@@ -248,9 +252,9 @@ npx hardhat run scripts/deploy-with-tee.js --network localhost
 2. Mints 10,000 USDC to test accounts 1-50
 3. Calls TEE's `/initialize_state` endpoint
 4. Gets empty encrypted state
-5. Deploys `PrivateBetting.sol` contract with token address
-6. Initializes contract with encrypted state
-7. Saves contract and token addresses to `contract-address.json`
+5. Deploys `PrivateBetting.sol` multi-market contract with token address
+6. Creates a default test market ("Will ETH reach $10,000 by end of 2025?")
+7. Saves contract, token addresses, and deployer (admin) address to `contract-address.json`
 
 **Expected Output:**
 
@@ -275,7 +279,11 @@ Deploying MockUSDC and PrivateBetting contracts with TEE initialization...
 ✓ PrivateBetting deployed to: 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
    Token address: 0x5FbDB2315678afecb367f032d93F642f64180aa3
 
+> Creating default test market...
+✓ Default market created (ID: 0)
+
 ✓ Contract and token addresses saved to contract-address.json
+   Admin address: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 ```
 
 ### Step 6: Start Event Listener
@@ -299,7 +307,7 @@ python contract_listener.py
      - Returns new encrypted state
   3. Listener receives result and updates contract state
 - Displays a_ratio and a_funds_ratio when `total_votes % 5 == 0` (if revealed by TEE)
-- **Tracks history** and saves to `a_ratio_history.json` for frontend visualization
+- **Tracks history per market** and saves to `a_ratio_history_{marketId}.json` for frontend visualization
 
 **Expected Output:**
 
@@ -312,7 +320,8 @@ SMART CONTRACT EVENT LISTENER
    Latest block: 5
 ✅ Contract loaded: 0x5FbDB2315678afecb367f032d93F642f64180aa3
    Admin: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-   Current state length: 228 chars
+   Total markets: 1
+   Loading historical data for markets...
 
 👂 Listening for VoteSubmitted events...
    Press Ctrl+C to stop
@@ -353,26 +362,49 @@ npm run dev
 
 **Access the frontend:**
 
-Open your browser to `http://localhost:3000`
+Open your browser to `http://localhost:3000/markets.html` (Market List Page)
 
 **Features:**
 
+- **Polymarket-style market listing** page showing all available markets
+- **Admin login** button to authenticate and create new markets
+- **Market cards** with title, description, volume, and status
+- **Click any market** to navigate to the voting page
 - **Dark theme** with teal blue accents
-- **Real-time chart** showing A-ratio and A-funds-ratio over time
+- **Real-time chart** (per market) showing A-ratio and A-funds-ratio over time
 - **Vote submission** using dropdown of Hardhat accounts (no wallet needed)
-- **Contract status** display
+- **Back button** to return to market list
 - **Finish prediction** button for admin
 
-### Step 9: Submit Votes (Web UI or Script)
+### Step 9: Admin Login (Create Markets)
+
+**IMPORTANT:** To create markets, you must login as admin first!
+
+1. Open `http://localhost:3000/markets.html`
+2. Click **"Admin Login"** button in the header
+3. Find your admin address in `contract-address.json`:
+   ```bash
+   cat contract-address.json | grep deployer
+   # Copy the address (e.g., 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266)
+   ```
+4. Paste the admin address and click **Login**
+5. You'll see "✓ Admin verified!" and the create market form will appear
+6. Fill in market title and description, click **Create Market**
+7. New market appears in the list!
+
+**Note:** Only the admin (deployer) can create markets. Regular users only see the market list and can vote.
+
+### Step 10: Submit Votes (Web UI or Script)
 
 #### Option A: Use Web Interface (Recommended)
 
-1. Open `http://localhost:3000` in your browser
-2. Select an account from the dropdown
-3. Enter bet amount (e.g., 100 USDC)
-4. Choose Option A or B
-5. Click "Submit Vote"
-6. Watch the chart update every 5 votes!
+1. Open `http://localhost:3000/markets.html` to see all markets
+2. Click on a market card to enter the voting page
+3. Select an account from the dropdown
+4. Enter bet amount (e.g., 100 USDC)
+5. Choose Option A or B
+6. Click "Submit Vote"
+7. Watch the chart update every 5 votes!
 
 #### Option B: Use Python Script
 
@@ -385,6 +417,11 @@ python submit_vote_to_contract.py
 **Interactive prompts:**
 
 ```
+📊 Available Markets (1):
+  0. Will ETH reach $10,000 by end of 2025? - Active
+
+Select market (0-0): 0
+
 Available accounts:
   1. 0x70997970...dc79C8 (10000.00 USDC)
   2. 0x3C44CdDd...07eAeE (10000.00 USDC)
@@ -396,7 +433,7 @@ Select account (1-5): 1
 Bet amount in USDC (e.g., 100): 100
 Bet on (A/B): A
 
-📝 Creating vote: 100 USDC on A
+📝 Creating vote for Market #0: 100 USDC on A
 ✅ Vote encrypted
 
 > Approving token transfer...
@@ -427,6 +464,7 @@ Bet on (A/B): A
 ============================================================
 📥 New Vote Event Detected!
 ============================================================
+Market ID: 0
 Voter: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 Amount: 100 USDC
 Block: 6
@@ -489,6 +527,7 @@ python auto_vote.py
 **Configuration** (edit `auto_vote.py`):
 
 ```python
+MARKET_ID = 0  # Which market to vote on
 START_ACCOUNT = 45
 END_ACCOUNT = 65
 MIN_BET = 100  # USDC
@@ -526,8 +565,14 @@ FINISH BETTING AND DISTRIBUTE FUNDS
 ============================================================
 ✅ Connected to Ethereum node
 ✅ Contract loaded: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+
+📊 Available Markets (1):
+  0. Will ETH reach $10,000 by end of 2025? - Active
+
+Select market to finish (0-0): 0
+
    Admin: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-   Current status: Active
+   Market status: Active
 
 ============================================================
 STEP 1: FINISH BETTING
@@ -635,7 +680,12 @@ CLAIM PAYOUT FROM CONTRACT
 ✅ Contract loaded: 0x5FbDB2315678afecb367f032d93F642f64180aa3
 ✅ Token loaded: 0x5FbDB2315678afecb367f032d93F642f64180aa3
 
-Accounts with payouts:
+📊 Available Markets (1):
+  0. Will ETH reach $10,000 by end of 2025? - Payouts Set
+
+Select market to claim from (0-0): 0
+
+Accounts with payouts for Market #0:
 ------------------------------------------------------------
   1. 0x70997970...dc79C8
       Payout: 166.67 USDC - 💰 Available
@@ -681,32 +731,35 @@ private-market-prediction/
 │   ├── node.py                     # Individual node implementation
 │   └── run_nodes.py               # Starts 7 threshold nodes
 ├── contracts/
-│   ├── PrivateBetting.sol         # Solidity smart contract (ERC20)
+│   ├── PrivateBetting.sol         # Multi-market smart contract (ERC20)
 │   └── MockUSDC.sol               # Test ERC20 token
 ├── scripts/
-│   ├── deploy-with-tee.js         # Deploy with TEE initialization
+│   ├── deploy-with-tee.js         # Deploy with TEE and create default market
 │   ├── export-abi.js              # Export contract ABI
 │   └── test-contract.js           # Contract testing script
 ├── front-end/                      # Web frontend (Vite + TypeScript)
 │   ├── src/
-│   │   ├── main.ts                # Frontend logic
+│   │   ├── main.ts                # Market voting page logic
+│   │   ├── markets.ts             # Market list page logic
 │   │   └── style.css              # Dark theme with teal blue
-│   ├── index.html                 # Main page
+│   ├── index.html                 # Market voting page (with ?marketId)
+│   ├── markets.html               # Market list page (home)
 │   ├── package.json               # Frontend dependencies
 │   └── README.md                  # Frontend docs
-├── contract_listener.py            # Event listener & history tracker
-├── frontend_api.py                # Backend API for web frontend
-├── submit_vote_to_contract.py     # CLI vote submission
-├── auto_vote.py                   # Automated voting script (testing)
-├── finish_and_distribute.py       # Admin settlement with batching
-├── claim_payout.py                # Winner claim interface
-├── a_ratio_history.json           # Auto-generated ratio history
+├── contract_listener.py            # Event listener & history tracker (multi-market)
+├── frontend_api.py                # Backend API with admin auth
+├── submit_vote_to_contract.py     # CLI vote submission (market selection)
+├── auto_vote.py                   # Automated voting script (market targeting)
+├── finish_and_distribute.py       # Admin settlement (market selection)
+├── claim_payout.py                # Winner claim (market selection)
+├── a_ratio_history_{id}.json      # Per-market ratio history
 ├── contract-abi.json              # Contract ABI
 ├── token-abi.json                 # Token ABI
 ├── hardhat.config.js              # Hardhat configuration
 ├── package.json                    # Node.js dependencies
 ├── README.md                       # This file
 ├── ERC20_MIGRATION.md             # ERC20 migration guide
+├── MULTI_MARKET_CHANGES.md        # Multi-market migration docs
 └── FRONTEND_SETUP.md              # Detailed frontend guide
 ```
 
@@ -720,14 +773,27 @@ private-market-prediction/
 - **10,000 USDC minted** to 50 test accounts on deployment
 - **Token balance tracking** throughout the system
 
+### Multi-Market Architecture
+
+- **Single contract handles multiple markets** - No need to deploy per market
+- **Admin creates markets** via authenticated API or frontend
+- **Market struct** with id, title, description, state, status, volume, timestamp
+- **Independent market states** - Each market has its own encrypted state and payouts
+- **Market-specific history** - Separate ratio history files per market
+- **Polymarket-style UI** - Browse all markets on landing page
+
 ### Web Frontend
 
+- **Two-page structure**: Market list (home) + Market voting (per market)
+- **Admin authentication** - Login required to create markets
+- **Market cards** showing title, description, volume, status, creation date
 - **Dark theme** with teal blue and cyan accents
 - **Dual-metric visualization**: A-ratio (vote %) and A-funds-ratio (funds %)
-- **Real-time chart** with Chart.js showing historical trends
+- **Real-time chart** with Chart.js showing historical trends per market
 - **Account dropdown** supporting up to 50 Hardhat accounts with USDC balances
 - **Admin controls** for finishing predictions and distributing payouts
 - **Responsive design** with full-width chart display
+- **Navigation** between market list and voting pages
 
 ### Performance Optimizations
 
@@ -739,11 +805,20 @@ private-market-prediction/
 ### Testing Tools
 
 - **auto_vote.py**: Automated voting with strategic distribution
+  - Target specific market with MARKET_ID configuration
   - Configurable vote bias (default: 65% vote A, 35% vote B)
   - Different betting strategies (A voters bet small, B voters bet large)
   - Creates interesting divergence between the two metrics
   - Adjustable parameters for custom scenarios
   - Bet ranges: 100-10,000 USDC
+
+### Admin Features
+
+- **Admin authentication** - Only contract admin can create markets
+- **Address verification** - Backend validates admin address against contract
+- **Session management** - Admin login persisted in localStorage
+- **Market creation API** - Protected endpoint with 403 for non-admins
+- **Visual indicators** - Admin status shown in header when logged in
 
 ## Security Considerations
 
@@ -789,11 +864,19 @@ private-market-prediction/
    - Proper token allowance handling
    - Token balance checks before voting
 
-6. **Additional Features**
-   - Time-based betting windows
-   - Minimum/maximum bet limits
-   - Emergency pause mechanism
-   - Upgrade mechanisms
+6. **Multi-Market Security**
+   - Market-specific access controls
+   - Admin role management (multi-admin support)
+   - Market state isolation (prevent cross-market attacks)
+   - Rate limiting for market creation
+
+7. **Additional Features**
+   - Time-based betting windows per market
+   - Minimum/maximum bet limits per market
+   - Emergency pause mechanism per market
+   - Upgrade mechanisms with proxy pattern
+   - Market categories and tagging
+   - Market search and filtering
 
 ## Quick Start (All-in-One)
 
@@ -807,7 +890,8 @@ For the complete setup with web frontend:
 6. **Terminal 6**: `python contract_listener.py`
 7. **Terminal 7**: `python frontend_api.py`
 8. **Terminal 8**: `cd front-end && npm install && npm run dev`
-9. **Browser**: Open `http://localhost:3000`
+9. **Browser**: Open `http://localhost:3000/markets.html`
+10. **Admin Login**: Click "Admin Login", paste admin address from `contract-address.json`
 
 ## Testing
 
@@ -820,18 +904,24 @@ npx hardhat run scripts/test-contract.js --network localhost
 
 ### What to Expect
 
+- ✅ Single contract deployed supporting multiple markets
 - ✅ MockUSDC token deployed with 10,000 USDC per test account
+- ✅ Default test market created automatically on deployment
+- ✅ Admin can login and create additional markets
+- ✅ Users browse markets on Polymarket-style landing page
+- ✅ Click market card to navigate to voting page
 - ✅ Votes submitted via web UI or CLI with USDC tokens
 - ✅ Automatic token approval before voting
-- ✅ Listener processes votes automatically
-- ✅ A-ratio and A-funds-ratio revealed every 5 votes
-- ✅ Real-time chart updates showing both metrics
+- ✅ Listener processes votes automatically per market
+- ✅ A-ratio and A-funds-ratio revealed every 5 votes per market
+- ✅ Real-time chart updates showing both metrics per market
 - ✅ Divergence between vote count and funds (with auto_vote.py)
 - ✅ Corrupt nodes don't break the system
-- ✅ Automatic batching handles 100+ voters
-- ✅ Winners can claim their proportional USDC share
+- ✅ Automatic batching handles 100+ voters per market
+- ✅ Winners can claim their proportional USDC share per market
 - ✅ Losers get 0
 - ✅ Contract token balance depletes as winners claim
+- ✅ Multiple markets can run simultaneously
 
 ## ⚠️ Disclaimer
 
