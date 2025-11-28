@@ -216,12 +216,14 @@ def create_market(req: CreateMarketRequest):
             raise HTTPException(status_code=500, detail="TEE initialization failed")
 
         initial_state = result["encrypted_state"]
+        initial_signature = result["signature"]
 
         # Create market (use the verified admin address)
         tx_hash = contract.functions.createMarket(
             req.title,
             req.description,
-            initial_state
+            initial_state,
+            bytes.fromhex(initial_signature[2:])  # Remove '0x' prefix
         ).transact({
             'from': input_address,
             'gas': 2000000

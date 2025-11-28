@@ -31,30 +31,51 @@ async function main() {
 	}
 	console.log('✓ Minted 10,000 USDC to 50 test accounts\n');
 
-	console.log('> Requesting initial state from TEE...');
+	// Get TEE address first
+	console.log('> Getting TEE signing address...');
+	let teeAddress;
+	try {
+		const teeResponse = await axios.get('http://127.0.0.1:8000/tee_address');
+		if (teeResponse.data.success) {
+			teeAddress = teeResponse.data.address;
+			console.log('✓ TEE Address:', teeAddress);
+		} else {
+			console.error('X Failed to get TEE address');
+			process.exit(1);
+		}
+	} catch (error) {
+		console.error("X Could not connect to TEE. Make sure it's running:");
+		console.error('   python -m uvicorn tee:app');
+		console.error('\nError:', error.message);
+		process.exit(1);
+	}
 
-	let initialState;
+	console.log('\n> Requesting initial state from TEE...');
+
+	let initialState, initialSignature;
 	try {
 		const response = await axios.get('http://127.0.0.1:8000/initialize_state');
 
 		if (response.data.success) {
 			initialState = response.data.encrypted_state;
+			initialSignature = response.data.signature;
 			console.log('✓ Received encrypted state from TEE');
-			console.log(`   State length: ${initialState.length} chars\n`);
+			console.log(`   State length: ${initialState.length} chars`);
+			console.log(`   Signature: ${initialSignature.substring(0, 20)}...\n`);
 		} else {
 			console.error('X TEE initialization failed:', response.data.error);
 			process.exit(1);
 		}
 	} catch (error) {
 		console.error("X Could not connect to TEE. Make sure it's running:");
-		console.error('   python tee.py');
+		console.error('   python -m uvicorn tee:app');
 		console.error('\nError:', error.message);
 		process.exit(1);
 	}
 
 	console.log('> Deploying PrivateBetting contract...');
 	const PrivateBetting = await hre.ethers.getContractFactory('PrivateBetting');
-	const contract = await PrivateBetting.deploy(usdcAddress);
+	const contract = await PrivateBetting.deploy(usdcAddress, teeAddress);
 
 	await contract.waitForDeployment();
 
@@ -64,10 +85,17 @@ async function main() {
 	
 	// Create a default market for testing
 	console.log('\n> Creating default test market...');
+	
+	// Ensure signature has 0x prefix for ethers.js
+	const signatureBytes = initialSignature.startsWith('0x') 
+		? initialSignature 
+		: '0x' + initialSignature;
+	
 	const createMarketTx = await contract.createMarket(
 		'Will ETH reach $10,000 by end of 2025?',
 		'A prediction market on whether Ethereum will reach $10,000 USD by December 31, 2025.',
-		initialState
+		initialState,
+		signatureBytes
 	);
 	await createMarketTx.wait();
 	console.log('✓ Default market created (ID: 0)\n');
@@ -76,6 +104,7 @@ async function main() {
 	const deploymentInfo = {
 		address: address,
 		tokenAddress: usdcAddress,
+		teeAddress: teeAddress,
 		deployer: await contract.admin(),
 		timestamp: new Date().toISOString(),
 	};

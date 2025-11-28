@@ -5,8 +5,12 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from umbral import SecretKey, PublicKey, decrypt_reencrypted, decrypt_original, Capsule, VerifiedCapsuleFrag, encrypt
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from eth_account import Account
+from eth_account.messages import encode_defunct
+from web3 import Web3
 
 STATE_FILE = "./kd/umbral_state.json"
+TEE_KEY_FILE = "./kd/tee_signing_key.json"
 
 app = FastAPI()
 
@@ -15,6 +19,26 @@ print("Generated new TEE secret key")
 
 print("TEE Public Key: " +
       base64.b64encode(secret_key.public_key().__bytes__()).decode("utf-8"))
+
+# Generate or load TEE Ethereum signing key
+if os.path.exists(TEE_KEY_FILE):
+    with open(TEE_KEY_FILE, 'r') as f:
+        key_data = json.load(f)
+        tee_account = Account.from_key(key_data['private_key'])
+        print(f"Loaded TEE signing key from {TEE_KEY_FILE}")
+else:
+    tee_account = Account.create()
+    key_data = {
+        'private_key': tee_account.key.hex(),
+        'address': tee_account.address
+    }
+    with open(TEE_KEY_FILE, 'w') as f:
+        json.dump(key_data, f, indent=2)
+    print(f"Generated new TEE signing key, saved to {TEE_KEY_FILE}")
+
+print(f"TEE Signing Address: {tee_account.address}")
+print(f"⚠️  IMPORTANT: Set this address as teeAddress in your smart contract!")
+print()
 
 
 def b64d(s: str) -> bytes:
@@ -49,6 +73,32 @@ def aes_encrypt(key: bytes, plaintext: bytes, aad: bytes | None = None):
 def aes_decrypt(key: bytes, nonce: bytes, ciphertext: bytes, aad: bytes | None = None):
     aesgcm = AESGCM(key)
     return aesgcm.decrypt(nonce, ciphertext, aad)
+
+
+def sign_state_transition(prev_state: str, new_state: str) -> str:
+    """
+    Sign a state transition (prevState, newState) using TEE's Ethereum key
+    Returns the signature as hex string
+    """
+    # Create message hash of (prevState, newState)
+    message_hash = Web3.solidity_keccak(
+        ['string', 'string'],
+        [prev_state, new_state]
+    )
+    
+    # Create Ethereum signed message (adds "\x19Ethereum Signed Message:\n32" prefix)
+    # This matches what toEthSignedMessageHash() expects in Solidity
+    eth_message = encode_defunct(primitive=message_hash)
+    
+    # Sign the message
+    signed_message = tee_account.sign_message(eth_message)
+    
+    # Return signature as hex string with 0x prefix
+    signature = signed_message.signature.hex()
+    if not signature.startswith('0x'):
+        signature = '0x' + signature
+    
+    return signature
 
 
 def decrypt_contract_state(encrypted_state_with_key: str) -> tuple[dict, bytes]:
@@ -90,6 +140,15 @@ def encrypt_contract_state(state: dict) -> str:
     return b64e(result)
 
 
+@app.get("/tee_address")
+def get_tee_address():
+    """Return the TEE's Ethereum signing address"""
+    return {
+        "success": True,
+        "address": tee_account.address
+    }
+
+
 @app.get("/initialize_state")
 def initialize_empty_state():
     try:
@@ -100,12 +159,16 @@ def initialize_empty_state():
         }
 
         encrypted_state = encrypt_contract_state(empty_state)
+        
+        # Sign the state transition (empty string -> new state)
+        signature = sign_state_transition("", encrypted_state)
 
-        print("Initialized empty state")
+        print("Initialized empty state with signature")
 
         return {
             "success": True,
-            "encrypted_state": encrypted_state
+            "encrypted_state": encrypted_state,
+            "signature": signature
         }
     except Exception as e:
         print(f"Initialization failed: {e}")
@@ -197,11 +260,15 @@ def process_vote(data: SubmitVoteRequest):
         print("Updated state:", current_state)
 
         new_encrypted_state = encrypt_contract_state(current_state)
+        
+        # Sign the state transition (prev_state -> new_state)
+        signature = sign_state_transition(data.current_state, new_encrypted_state)
 
         # Only reveal a_ratio if total votes is divisible by 5 (privacy protection)
         response = {
             "success": True,
             "new_encrypted_state": new_encrypted_state,
+            "signature": signature,
             "total_votes": total_votes
         }
 
