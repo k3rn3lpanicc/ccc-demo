@@ -14,3 +14,4 @@ umbral_state.json
 a_ratio_history.json
 *.pyc
 /nodes/__pycache__
+a_ratio_history*
