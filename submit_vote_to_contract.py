@@ -8,6 +8,7 @@ from umbral import PublicKey, encrypt
 RPC_URL = "http://127.0.0.1:8545"
 CONTRACT_ADDRESS_FILE = "contract-address.json"
 CONTRACT_ABI_FILE = "contract-abi.json"
+TOKEN_ABI_FILE = "token-abi.json"
 STATE_FILE = "./kd/umbral_state.json"
 
 
@@ -46,17 +47,28 @@ def main():
     print(f"   Chain ID: {w3.eth.chain_id}")
 
     with open(CONTRACT_ADDRESS_FILE, 'r') as f:
-        contract_address = json.load(f)['address']
+        contract_info = json.load(f)
+        contract_address = contract_info['address']
+        token_address = contract_info['tokenAddress']
 
     with open(CONTRACT_ABI_FILE, 'r') as f:
         contract_abi = json.load(f)
+
+    with open(TOKEN_ABI_FILE, 'r') as f:
+        token_abi = json.load(f)
 
     contract = w3.eth.contract(
         address=Web3.to_checksum_address(contract_address),
         abi=contract_abi
     )
 
+    token = w3.eth.contract(
+        address=Web3.to_checksum_address(token_address),
+        abi=token_abi
+    )
+
     print(f"✓ Contract loaded: {contract_address}")
+    print(f"✓ Token loaded: {token_address}")
 
     accounts = w3.eth.accounts
     if len(accounts) < 2:
@@ -65,8 +77,8 @@ def main():
 
     print("\nAvailable accounts:")
     for i, acc in enumerate(accounts[1:9], 1):
-        balance = w3.from_wei(w3.eth.get_balance(acc), 'ether')
-        print(f"  {i}. {acc} ({balance:.2f} ETH)")
+        token_balance = token.functions.balanceOf(acc).call()
+        print(f"  {i}. {acc} ({w3.from_wei(token_balance, 'ether')} USDC)")
 
     choice = input("\nSelect account (1-8): ")
     try:
@@ -77,15 +89,15 @@ def main():
         voter = accounts[1]
 
     print(f"\n   Selected voter: {voter}")
-    balance = w3.eth.get_balance(voter)
-    print(f"   Balance: {w3.from_wei(balance, 'ether')} ETH")
+    token_balance = token.functions.balanceOf(voter).call()
+    print(f"   Balance: {w3.from_wei(token_balance, 'ether')} USDC")
     wallet_address = voter
-    bet_eth = input("\nBet amount in ETH (e.g., 0.1): ")
+    bet_usdc = input("\nBet amount in USDC (e.g., 100): ")
     try:
-        bet_amount_wei = w3.to_wei(float(bet_eth), 'ether')
+        bet_amount = w3.to_wei(float(bet_usdc), 'ether')
     except:
-        print("Invalid amount, using 0.1 ETH")
-        bet_amount_wei = w3.to_wei(0.1, 'ether')
+        print("Invalid amount, using 100 USDC")
+        bet_amount = w3.to_wei(100, 'ether')
 
     bet_on = input("Bet on (A/B): ").upper()
 
@@ -95,13 +107,13 @@ def main():
 
     vote_data = {
         wallet_address: {
-            "bet_amount": bet_amount_wei,
+            "bet_amount": bet_amount,
             "bet_on": bet_on
         }
     }
 
     print(
-        f"\n> Creating vote: {w3.from_wei(bet_amount_wei, 'ether')} ETH on {bet_on}")
+        f"\n> Creating vote: {w3.from_wei(bet_amount, 'ether')} USDC on {bet_on}")
     master_public_key = load_master_key()
     plaintext = json.dumps(vote_data).encode("utf-8")
     sym_key = os.urandom(32)
@@ -111,17 +123,26 @@ def main():
     encrypted_sym_key_b64 = b64e(encrypted_sym_key)
     capsule_b64 = b64e(bytes(capsule))
     print("✓ Vote encrypted")
+
+    print(f"\n> Approving token transfer...")
+    approve_tx = token.functions.approve(contract_address, bet_amount).transact({
+        'from': voter,
+        'gas': 100000
+    })
+    w3.eth.wait_for_transaction_receipt(approve_tx)
+    print("✓ Token approved")
+
     print(
-        f"\n> Submitting to contract with {w3.from_wei(bet_amount_wei, 'ether')} ETH...")
+        f"\n> Submitting to contract with {w3.from_wei(bet_amount, 'ether')} USDC...")
 
     try:
         tx_hash = contract.functions.vote(
             vote_ciphertext_b64,
             encrypted_sym_key_b64,
-            capsule_b64
+            capsule_b64,
+            bet_amount
         ).transact({
             'from': voter,
-            'value': bet_amount_wei,
             'gas': 3000000
         })
 

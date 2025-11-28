@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 contract PrivateBetting {
     address public admin;
     string public encryptedState;
     bool public bettingFinished;
+    IERC20 public token;
 
     enum BettingStatus {
         Active,
@@ -49,25 +52,34 @@ contract PrivateBetting {
         _;
     }
 
-    constructor(string memory _initialEncryptedState) {
+    constructor(string memory _initialEncryptedState, address _tokenAddress) {
         admin = msg.sender;
         encryptedState = _initialEncryptedState;
         status = BettingStatus.Active;
         bettingFinished = false;
+        token = IERC20(_tokenAddress);
     }
 
     /**
-     * @dev User submits their encrypted vote along with funds
+     * @dev User submits their encrypted vote along with tokens
      * @param encryptedVote Base64 encoded AES-encrypted vote
      * @param encryptedSymKey Base64 encoded threshold-encrypted symmetric key
      * @param capsule Base64 encoded Umbral capsule
+     * @param amount Amount of tokens to bet
      */
     function vote(
         string memory encryptedVote,
         string memory encryptedSymKey,
-        string memory capsule
-    ) external payable bettingActive {
-        require(msg.value > 0, "Must send funds with vote");
+        string memory capsule,
+        uint256 amount
+    ) external bettingActive {
+        require(amount > 0, "Must bet a positive amount");
+
+        // Transfer tokens from user to contract
+        require(
+            token.transferFrom(msg.sender, address(this), amount),
+            "Token transfer failed"
+        );
 
         // Emit event for nodes to listen to
         emit VoteSubmitted(
@@ -75,7 +87,7 @@ contract PrivateBetting {
             encryptedVote,
             encryptedSymKey,
             capsule,
-            msg.value
+            amount
         );
     }
 
@@ -138,8 +150,7 @@ contract PrivateBetting {
         uint256 amount = payouts[msg.sender];
         hasClaimed[msg.sender] = true;
 
-        (bool success, ) = msg.sender.call{value: amount}("");
-        require(success, "Transfer failed");
+        require(token.transfer(msg.sender, amount), "Token transfer failed");
 
         emit PayoutClaimed(msg.sender, amount);
     }
@@ -166,9 +177,16 @@ contract PrivateBetting {
     }
 
     /**
-     * @dev Get contract balance
+     * @dev Get contract token balance
      */
     function getContractBalance() external view returns (uint256) {
-        return address(this).balance;
+        return token.balanceOf(address(this));
+    }
+
+    /**
+     * @dev Get token address
+     */
+    function getTokenAddress() external view returns (address) {
+        return address(token);
     }
 }

@@ -19,6 +19,20 @@ async function main() {
   );
   
   console.log('✅ Contract ABI exported to contract-abi.json');
+
+  // Export Token ABI
+  const tokenArtifactPath = path.join(__dirname, '../artifacts/contracts/MockUSDC.sol/MockUSDC.json');
+  
+  if (fs.existsSync(tokenArtifactPath)) {
+    const tokenArtifact = JSON.parse(fs.readFileSync(tokenArtifactPath, 'utf8'));
+    fs.writeFileSync(
+      'token-abi.json',
+      JSON.stringify(tokenArtifact.abi, null, 2)
+    );
+    console.log('✅ Token ABI exported to token-abi.json');
+  } else {
+    console.warn('⚠️  MockUSDC not compiled. Token ABI not exported.');
+  }
 }
 
 main()

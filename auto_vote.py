@@ -13,13 +13,14 @@ from umbral import PublicKey, encrypt
 RPC_URL = "http://127.0.0.1:8545"
 CONTRACT_ADDRESS_FILE = "contract-address.json"
 CONTRACT_ABI_FILE = "contract-abi.json"
+TOKEN_ABI_FILE = "token-abi.json"
 STATE_FILE = "./kd/umbral_state.json"
 
 # Configuration
 START_ACCOUNT = 45
 END_ACCOUNT = 65
-MIN_BET = 0.1  # ETH
-MAX_BET = 20.0  # ETH
+MIN_BET = 100  # USDC
+MAX_BET = 10000  # USDC
 DELAY_BETWEEN_VOTES = 0.5  # seconds
 
 # Voting behavior configuration
@@ -54,14 +55,14 @@ def aes_encrypt(key: bytes, plaintext: bytes):
     return nonce, ct
 
 
-def submit_vote(w3, contract, voter_address, bet_amount_eth, bet_on, master_public_key):
+def submit_vote(w3, contract, token, voter_address, bet_amount_usdc, bet_on, master_public_key):
     """Submit a single encrypted vote"""
-    bet_amount_wei = w3.to_wei(bet_amount_eth, 'ether')
+    bet_amount = w3.to_wei(bet_amount_usdc, 'ether')
 
     # Create vote data
     vote_data = {
         voter_address: {
-            "bet_amount": bet_amount_wei,
+            "bet_amount": bet_amount,
             "bet_on": bet_on
         }
     }
@@ -76,14 +77,22 @@ def submit_vote(w3, contract, voter_address, bet_amount_eth, bet_on, master_publ
     encrypted_sym_key_b64 = b64e(encrypted_sym_key)
     capsule_b64 = b64e(bytes(capsule))
 
+    # Approve token transfer
+    contract_address = contract.address
+    approve_tx = token.functions.approve(contract_address, bet_amount).transact({
+        'from': voter_address,
+        'gas': 100000
+    })
+    w3.eth.wait_for_transaction_receipt(approve_tx)
+
     # Submit to contract
     tx_hash = contract.functions.vote(
         vote_ciphertext_b64,
         encrypted_sym_key_b64,
-        capsule_b64
+        capsule_b64,
+        bet_amount
     ).transact({
         'from': voter_address,
-        'value': bet_amount_wei,
         'gas': 3000000
     })
 
@@ -96,7 +105,7 @@ def main():
     print("AUTOMATED VOTING SCRIPT")
     print("="*70)
     print(f"Accounts: {START_ACCOUNT} to {END_ACCOUNT}")
-    print(f"Bet range: {MIN_BET} to {MAX_BET} ETH")
+    print(f"Bet range: {MIN_BET} to {MAX_BET} USDC")
     print(f"Delay between votes: {DELAY_BETWEEN_VOTES} seconds")
     print()
     print("Voting Strategy:")
@@ -118,17 +127,28 @@ def main():
 
     # Load contract
     with open(CONTRACT_ADDRESS_FILE, 'r') as f:
-        contract_address = json.load(f)['address']
+        contract_info = json.load(f)
+        contract_address = contract_info['address']
+        token_address = contract_info['tokenAddress']
 
     with open(CONTRACT_ABI_FILE, 'r') as f:
         contract_abi = json.load(f)
+
+    with open(TOKEN_ABI_FILE, 'r') as f:
+        token_abi = json.load(f)
 
     contract = w3.eth.contract(
         address=Web3.to_checksum_address(contract_address),
         abi=contract_abi
     )
 
+    token = w3.eth.contract(
+        address=Web3.to_checksum_address(token_address),
+        abi=token_abi
+    )
+
     print(f"✓ Contract loaded: {contract_address}")
+    print(f"✓ Token loaded: {token_address}")
 
     # Load master key
     master_public_key = load_master_key()
@@ -172,17 +192,17 @@ def main():
         if bet_on == 'A':
             # A voters: mostly small to medium bets
             if random.random() < A_HIGH_BET_PROBABILITY:
-                bet_amount = round(random.uniform(5.0, MAX_BET), 4)  # High bet
+                bet_amount = round(random.uniform(5000, MAX_BET), 2)  # High bet
             else:
                 bet_amount = round(random.uniform(
-                    MIN_BET, 3.0), 4)  # Low to medium bet
+                    MIN_BET, 3000), 2)  # Low to medium bet
         else:
             # B voters: mostly high bets
             if random.random() < B_HIGH_BET_PROBABILITY:
-                bet_amount = round(random.uniform(5.0, MAX_BET), 4)  # High bet
+                bet_amount = round(random.uniform(5000, MAX_BET), 2)  # High bet
             else:
                 bet_amount = round(random.uniform(
-                    MIN_BET, 3.0), 4)  # Low to medium bet
+                    MIN_BET, 3000), 2)  # Low to medium bet
 
         # Track stats
         if bet_on == 'A':
@@ -194,11 +214,11 @@ def main():
 
         print(
             f"[{account_index}/{END_ACCOUNT}] Account {account_index}: {voter_address[:10]}...")
-        print(f"           Voting: {bet_on} with {bet_amount} ETH")
+        print(f"           Voting: {bet_on} with {bet_amount} USDC")
 
         try:
             success, tx_hash = submit_vote(
-                w3, contract, voter_address, bet_amount, bet_on, master_public_key
+                w3, contract, token, voter_address, bet_amount, bet_on, master_public_key
             )
 
             if success:
@@ -238,10 +258,10 @@ def main():
     print()
     print("Funds Distribution:")
     print(
-        f"   Option A: {total_a_funds:.4f} ETH ({total_a_funds/total_funds*100:.1f}%)")
+        f"   Option A: {total_a_funds:.2f} USDC ({total_a_funds/total_funds*100:.1f}%)")
     print(
-        f"   Option B: {total_b_funds:.4f} ETH ({total_b_funds/total_funds*100:.1f}%)")
-    print(f"   Total: {total_funds:.4f} ETH")
+        f"   Option B: {total_b_funds:.2f} USDC ({total_b_funds/total_funds*100:.1f}%)")
+    print(f"   Total: {total_funds:.2f} USDC")
     print()
     print("> Wait a few seconds for the listener to process all votes...")
     print("   Then check the frontend to see the updated ratios!")

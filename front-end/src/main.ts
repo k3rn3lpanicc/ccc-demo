@@ -38,8 +38,8 @@ async function loadContractStatus() {
 			document.getElementById('contract-address')!.textContent =
 				status.address.slice(0, 10) + '...' + status.address.slice(-8);
 			document.getElementById('contract-balance')!.textContent = `${status.balance.toFixed(
-				4
-			)} ETH`;
+				2
+			)} USDC`;
 			document.getElementById('betting-status')!.textContent = status.bettingFinished
 				? '🔴 Finished'
 				: '🟢 Active';
@@ -77,7 +77,7 @@ async function loadAccounts() {
 				option.textContent = `#${account.index} ${account.address.slice(
 					0,
 					20
-				)}...${account.address.slice(-20)} (${account.balance.toFixed(2)} ETH)`;
+				)}...${account.address.slice(-20)} (${account.balance.toFixed(2)} USDC)`;
 				select.appendChild(option);
 			});
 		}
