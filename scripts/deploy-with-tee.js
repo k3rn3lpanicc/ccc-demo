@@ -54,13 +54,23 @@ async function main() {
 
 	console.log('> Deploying PrivateBetting contract...');
 	const PrivateBetting = await hre.ethers.getContractFactory('PrivateBetting');
-	const contract = await PrivateBetting.deploy(initialState, usdcAddress);
+	const contract = await PrivateBetting.deploy(usdcAddress);
 
 	await contract.waitForDeployment();
 
 	const address = await contract.getAddress();
 	console.log('✓ PrivateBetting deployed to:', address);
-	console.log(`   Token address: ${usdcAddress}\n`);
+	console.log(`   Token address: ${usdcAddress}`);
+	
+	// Create a default market for testing
+	console.log('\n> Creating default test market...');
+	const createMarketTx = await contract.createMarket(
+		'Will ETH reach $10,000 by end of 2025?',
+		'A prediction market on whether Ethereum will reach $10,000 USD by December 31, 2025.',
+		initialState
+	);
+	await createMarketTx.wait();
+	console.log('✓ Default market created (ID: 0)\n');
 
 	// Save the addresses for later use
 	const deploymentInfo = {

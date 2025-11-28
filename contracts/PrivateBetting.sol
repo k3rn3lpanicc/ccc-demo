@@ -5,23 +5,45 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract PrivateBetting {
     address public admin;
-    string public encryptedState;
-    bool public bettingFinished;
     IERC20 public token;
+    uint256 public marketCount;
 
     enum BettingStatus {
         Active,
         Finished,
         PayoutsSet
     }
-    BettingStatus public status;
 
-    // Mapping of wallet addresses to their payouts (set after betting finishes)
-    mapping(address => uint256) public payouts;
-    mapping(address => bool) public hasClaimed;
+    struct Market {
+        uint256 marketId;
+        string title;
+        string description;
+        string encryptedState;
+        BettingStatus status;
+        bool bettingFinished;
+        uint256 createdAt;
+        uint256 totalVolume;
+    }
+
+    // Market ID => Market data
+    mapping(uint256 => Market) public markets;
+    
+    // Market ID => voter => payout amount
+    mapping(uint256 => mapping(address => uint256)) public payouts;
+    
+    // Market ID => voter => has claimed
+    mapping(uint256 => mapping(address => bool)) public hasClaimed;
 
     // Events
+    event MarketCreated(
+        uint256 indexed marketId,
+        string title,
+        string description,
+        uint256 createdAt
+    );
+
     event VoteSubmitted(
+        uint256 indexed marketId,
         address indexed voter,
         string encryptedVote,
         string encryptedSymKey,
@@ -29,50 +51,107 @@ contract PrivateBetting {
         uint256 amount
     );
 
-    event BettingFinished(string winningOption, string finalState);
-    event PayoutsSet(uint256 totalWinners, uint256 totalPool);
-    event PayoutClaimed(address indexed winner, uint256 amount);
-    event StateUpdated(string newEncryptedState);
+    event BettingFinished(
+        uint256 indexed marketId,
+        string winningOption,
+        string finalState
+    );
+
+    event PayoutsSet(
+        uint256 indexed marketId,
+        uint256 totalWinners,
+        uint256 totalPool
+    );
+
+    event PayoutClaimed(
+        uint256 indexed marketId,
+        address indexed winner,
+        uint256 amount
+    );
+
+    event StateUpdated(
+        uint256 indexed marketId,
+        string newEncryptedState
+    );
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "Only admin can call this");
         _;
     }
 
-    modifier bettingActive() {
-        require(status == BettingStatus.Active, "Betting is not active");
+    modifier marketExists(uint256 marketId) {
+        require(marketId < marketCount, "Market does not exist");
         _;
     }
 
-    modifier bettingFinishedNotPaid() {
+    modifier bettingActive(uint256 marketId) {
         require(
-            status == BettingStatus.Finished,
+            markets[marketId].status == BettingStatus.Active,
+            "Betting is not active"
+        );
+        _;
+    }
+
+    modifier bettingFinishedNotPaid(uint256 marketId) {
+        require(
+            markets[marketId].status == BettingStatus.Finished,
             "Betting not finished or payouts already set"
         );
         _;
     }
 
-    constructor(string memory _initialEncryptedState, address _tokenAddress) {
+    constructor(address _tokenAddress) {
         admin = msg.sender;
-        encryptedState = _initialEncryptedState;
-        status = BettingStatus.Active;
-        bettingFinished = false;
         token = IERC20(_tokenAddress);
+        marketCount = 0;
+    }
+
+    /**
+     * @dev Admin creates a new market
+     * @param title Market title
+     * @param description Market description
+     * @param initialEncryptedState Initial encrypted state from TEE
+     */
+    function createMarket(
+        string memory title,
+        string memory description,
+        string memory initialEncryptedState
+    ) external onlyAdmin returns (uint256) {
+        uint256 marketId = marketCount;
+        
+        markets[marketId] = Market({
+            marketId: marketId,
+            title: title,
+            description: description,
+            encryptedState: initialEncryptedState,
+            status: BettingStatus.Active,
+            bettingFinished: false,
+            createdAt: block.timestamp,
+            totalVolume: 0
+        });
+
+        marketCount++;
+
+        emit MarketCreated(marketId, title, description, block.timestamp);
+        
+        return marketId;
     }
 
     /**
      * @dev User submits their encrypted vote along with tokens
+     * @param marketId Market ID to vote on
      * @param encryptedVote Base64 encoded AES-encrypted vote
      * @param encryptedSymKey Base64 encoded threshold-encrypted symmetric key
      * @param capsule Base64 encoded Umbral capsule
      * @param amount Amount of tokens to bet
      */
     function vote(
+        uint256 marketId,
         string memory encryptedVote,
         string memory encryptedSymKey,
         string memory capsule,
         uint256 amount
-    ) external bettingActive {
+    ) external marketExists(marketId) bettingActive(marketId) {
         require(amount > 0, "Must bet a positive amount");
 
         // Transfer tokens from user to contract
@@ -81,8 +160,12 @@ contract PrivateBetting {
             "Token transfer failed"
         );
 
+        // Update market volume
+        markets[marketId].totalVolume += amount;
+
         // Emit event for nodes to listen to
         emit VoteSubmitted(
+            marketId,
             msg.sender,
             encryptedVote,
             encryptedSymKey,
@@ -92,88 +175,151 @@ contract PrivateBetting {
     }
 
     /**
-     * @dev Admin finishes the betting period
-     * Can only be called once
+     * @dev Admin finishes the betting period for a market
+     * @param marketId Market ID to finish
      */
-    function finishBetting() external onlyAdmin bettingActive {
-        status = BettingStatus.Finished;
-        bettingFinished = true;
+    function finishBetting(uint256 marketId)
+        external
+        onlyAdmin
+        marketExists(marketId)
+        bettingActive(marketId)
+    {
+        markets[marketId].status = BettingStatus.Finished;
+        markets[marketId].bettingFinished = true;
 
-        emit BettingFinished("", encryptedState);
+        emit BettingFinished(marketId, "", markets[marketId].encryptedState);
     }
 
     /**
      * @dev Update the encrypted state (called by oracle/nodes after processing vote)
+     * @param marketId Market ID
      * @param newEncryptedState The new encrypted state from TEE
      */
-    function updateState(
-        string memory newEncryptedState
-    ) external bettingActive {
+    function updateState(uint256 marketId, string memory newEncryptedState)
+        external
+        marketExists(marketId)
+        bettingActive(marketId)
+    {
         // In production, you'd want to verify the caller is authorized (oracle/node)
         // For now, anyone can update during active betting
-        encryptedState = newEncryptedState;
+        markets[marketId].encryptedState = newEncryptedState;
 
-        emit StateUpdated(newEncryptedState);
+        emit StateUpdated(marketId, newEncryptedState);
     }
 
     /**
      * @dev Set payouts after TEE calculates them (supports batching)
+     * @param marketId Market ID
      * @param winners Array of winner addresses
      * @param amounts Array of payout amounts (in wei)
      * @param isLastBatch True if this is the final batch
      */
     function setPayouts(
+        uint256 marketId,
         address[] memory winners,
         uint256[] memory amounts,
         bool isLastBatch
-    ) external onlyAdmin bettingFinishedNotPaid {
+    )
+        external
+        onlyAdmin
+        marketExists(marketId)
+        bettingFinishedNotPaid(marketId)
+    {
         require(winners.length == amounts.length, "Arrays length mismatch");
 
         for (uint256 i = 0; i < winners.length; i++) {
-            payouts[winners[i]] = amounts[i];
+            payouts[marketId][winners[i]] = amounts[i];
         }
 
         if (isLastBatch) {
-            status = BettingStatus.PayoutsSet;
-            emit PayoutsSet(winners.length, 0);
+            markets[marketId].status = BettingStatus.PayoutsSet;
+            emit PayoutsSet(marketId, winners.length, 0);
         }
     }
 
     /**
-     * @dev Winners claim their payouts
+     * @dev Winners claim their payouts for a specific market
+     * @param marketId Market ID
      */
-    function claimPayout() external {
-        require(status == BettingStatus.PayoutsSet, "Payouts not set yet");
-        require(payouts[msg.sender] > 0, "No payout available");
-        require(!hasClaimed[msg.sender], "Already claimed");
+    function claimPayout(uint256 marketId) external marketExists(marketId) {
+        require(
+            markets[marketId].status == BettingStatus.PayoutsSet,
+            "Payouts not set yet"
+        );
+        require(payouts[marketId][msg.sender] > 0, "No payout available");
+        require(!hasClaimed[marketId][msg.sender], "Already claimed");
 
-        uint256 amount = payouts[msg.sender];
-        hasClaimed[msg.sender] = true;
+        uint256 amount = payouts[marketId][msg.sender];
+        hasClaimed[marketId][msg.sender] = true;
 
         require(token.transfer(msg.sender, amount), "Token transfer failed");
 
-        emit PayoutClaimed(msg.sender, amount);
+        emit PayoutClaimed(marketId, msg.sender, amount);
     }
 
     /**
-     * @dev Get the current encrypted state
+     * @dev Get the current encrypted state for a market
+     * @param marketId Market ID
      */
-    function getCurrentState() external view returns (string memory) {
-        return encryptedState;
+    function getCurrentState(uint256 marketId)
+        external
+        view
+        marketExists(marketId)
+        returns (string memory)
+    {
+        return markets[marketId].encryptedState;
     }
 
     /**
-     * @dev Get payout amount for an address
+     * @dev Get market details
+     * @param marketId Market ID
      */
-    function getPayoutAmount(address wallet) external view returns (uint256) {
-        return payouts[wallet];
+    function getMarket(uint256 marketId)
+        external
+        view
+        marketExists(marketId)
+        returns (Market memory)
+    {
+        return markets[marketId];
     }
 
     /**
-     * @dev Check if an address has claimed their payout
+     * @dev Get all market IDs (for listing)
      */
-    function hasClaimedPayout(address wallet) external view returns (bool) {
-        return hasClaimed[wallet];
+    function getAllMarketIds() external view returns (uint256[] memory) {
+        uint256[] memory ids = new uint256[](marketCount);
+        for (uint256 i = 0; i < marketCount; i++) {
+            ids[i] = i;
+        }
+        return ids;
+    }
+
+    /**
+     * @dev Get payout amount for an address in a specific market
+     * @param marketId Market ID
+     * @param wallet Wallet address
+     */
+    function getPayoutAmount(uint256 marketId, address wallet)
+        external
+        view
+        marketExists(marketId)
+        returns (uint256)
+    {
+        return payouts[marketId][wallet];
+    }
+
+    /**
+     * @dev Check if an address has claimed their payout for a market
+     * @param marketId Market ID
+     * @param wallet Wallet address
+     */
+    function hasClaimedPayout(uint256 marketId, address wallet)
+        external
+        view
+        marketExists(marketId)
+        returns (bool)
+    {
+        return hasClaimed[marketId][wallet];
     }
 
     /**
