@@ -122,11 +122,13 @@ User Vote → Smart Contract → Event Listener → Nodes (Threshold Re-encrypti
 - **Python 3.12+** with pip
 - **Node.js 16+** with npm
 - **Git**
+- **MetaMask** browser extension for wallet interaction
+- **BSC Testnet** tokens (BNB for gas fees)
 
 ### Python Dependencies
 
 ```bash
-pip install fastapi uvicorn web3 cryptography umbral-pre requests
+pip install fastapi uvicorn web3 cryptography umbral-pre requests python-dotenv
 ```
 
 ### Node.js Dependencies
@@ -237,81 +239,45 @@ Corrupt nodes may refuse to cooperate, but system remains secure!
 - System works even if 3 nodes are down/corrupt
 - Only need 4 honest nodes out of 7
 
-### Step 4: Start Local Ethereum Network
+### Step 4: Deploy Smart Contract to BSC Testnet
+
+**⚠️ IMPORTANT**: This project is deployed on **BSC Testnet**, not a local Hardhat node.
+
+**Prerequisites:**
+- Admin wallet with BNB for gas fees on BSC Testnet
+- Admin private key stored in `.env` file or environment variable
+
+**Deployment:**
+
+The contract has already been deployed to BSC Testnet. The deployment details are stored in `contract-address.json`:
+
+```json
+{
+  "contract": "0x...",  // PrivateBetting contract
+  "token": "0x...",     // Payment token (e.g., USDC, DAI)
+  "deployer": "0x...",  // Admin address
+  "teeAddress": "0x..." // TEE signing address
+}
+```
+
+**Network Configuration:**
+- **RPC URL**: `https://data-seed-prebsc-1-s1.binance.org:8545/`
+- **Chain ID**: 97 (BSC Testnet)
+- **Block Explorer**: https://testnet.bscscan.com/
+
+**Note**: Each market can use a different ERC20 payment token (USDC, DAI, etc.). The token address is specified when creating a market.
+
+### Step 5: Start Event Listener
+
+**⚠️ IMPORTANT**: Configure admin private key before starting the listener!
+
+**Create a `.env` file** in the project root:
 
 ```bash
-cd ..
-npm run node
+ADMIN_PRIVATE_KEY=your_admin_private_key_here
 ```
 
-**What this does:**
-
-- Starts Hardhat local Ethereum network
-- Provides 100 test accounts with 10,000 ETH each (for gas)
-- Network runs on `http://127.0.0.1:8545`
-
-**Keep this terminal running.**
-
-### Step 5: Deploy Smart Contract
-
-**New terminal:**
-
-```bash
-npx hardhat run scripts/deploy-with-tee.js --network localhost
-```
-
-**What this does:**
-
-1. Deploys MockUSDC token contract
-2. Mints 10,000 USDC to test accounts 1-50
-3. Gets TEE signing address from `/tee_address` endpoint
-4. Calls TEE's `/initialize_state` endpoint
-5. Gets empty encrypted state + signature
-6. Deploys `PrivateBetting.sol` multi-market contract with token address and TEE address
-7. Creates a default test market with initial state + signature
-8. Saves contract, token, TEE addresses, and deployer (admin) address to `contract-address.json`
-
-**Expected Output:**
-
-```
-Deploying MockUSDC and PrivateBetting contracts with TEE initialization...
-
-> Deploying MockUSDC token...
-✓ MockUSDC deployed to: 0x5FbDB2315678afecb367f032d93F642f64180aa3
-   Deployer balance: 1000000.0 USDC
-
-> Minting USDC to test accounts (1-50)...
-   Minted to 10 accounts...
-   Minted to 20 accounts...
-   ...
-✓ Minted 10,000 USDC to 50 test accounts
-
-> Getting TEE signing address...
-✓ TEE Address: 0x25fb079F3A0f60333cdB3BC2dE7Af6d7B7EF5DA0
-
-> Requesting initial state from TEE...
-✓ Received encrypted state from TEE
-   State length: 228 chars
-   Signature: 0x0ef238776cb0bb34...
-
-> Deploying PrivateBetting contract...
-✓ PrivateBetting deployed to: 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
-   Token address: 0x5FbDB2315678afecb367f032d93F642f64180aa3
-   TEE address: 0x25fb079F3A0f60333cdB3BC2dE7Af6d7B7EF5DA0
-
-> Creating default test market...
-✓ Default market created (ID: 0)
-
-✓ Contract and token addresses saved to contract-address.json
-   Admin address: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-   TEE address: 0x25fb079F3A0f60333cdB3BC2dE7Af6d7B7EF5DA0
-```
-
-**Note**: The TEE address is stored in the contract and used to verify all state transitions.
-
-### Step 6: Start Event Listener
-
-**New terminal:**
+**Start the listener:**
 
 ```bash
 python contract_listener.py
@@ -319,7 +285,7 @@ python contract_listener.py
 
 **What this does:**
 
-- Connects to local Ethereum network
+- Connects to **BSC Testnet** via RPC URL
 - Listens for `VoteSubmitted` events from the contract
 - When a vote is detected:
   1. Calls one node (port 5000) with the encrypted vote
@@ -328,7 +294,7 @@ python contract_listener.py
      - Forwards vote + cfrags to TEE
      - TEE decrypts and processes vote
      - Returns new encrypted state
-  3. Listener receives result and updates contract state
+  3. Listener receives result and **updates contract state on BSC Testnet** using admin private key
 - Displays a_ratio and a_funds_ratio when `total_votes % 5 == 0` (if revealed by TEE)
 - **Tracks history per market** and saves to `a_ratio_history_{marketId}.json` for frontend visualization
 
@@ -338,26 +304,29 @@ python contract_listener.py
 ============================================================
 SMART CONTRACT EVENT LISTENER
 ============================================================
-✅ Connected to Ethereum node
-   Chain ID: 1337
-   Latest block: 5
-✅ Contract loaded: 0x5FbDB2315678afecb367f032d93F642f64180aa3
-   Admin: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-   Total markets: 1
+✅ Connected to BSC Testnet
+   Chain ID: 97
+   Latest block: 25832156
+✅ Contract loaded: 0x...
+   Admin: 0x...
+   Total markets: 2
    Loading historical data for markets...
 
-👂 Listening for VoteSubmitted events...
+👂 Listening for VoteSubmitted events on BSC Testnet...
    Press Ctrl+C to stop
-
-Process past events from block 0? (y/n): n
-   Starting from current block: 5
 ```
 
 **Keep this terminal running.**
 
-### Step 7: Start Frontend API
+### Step 6: Start Frontend API
 
-**New terminal:**
+**Create a `.env` file** (if not already created):
+
+```bash
+ADMIN_PRIVATE_KEY=your_admin_private_key_here
+```
+
+**Start the API:**
 
 ```bash
 python frontend_api.py
@@ -367,13 +336,14 @@ python frontend_api.py
 
 - Starts FastAPI server on `http://127.0.0.1:3001`
 - Provides REST API for the web frontend
+- Connects to **BSC Testnet** for all blockchain operations
 - Handles vote submission with automatic encryption
 - Manages finish/distribute workflow with batching for large voter counts
-- Supports up to 50 accounts from Hardhat
+- **Uses admin private key** for contract state updates
 
 **Keep this terminal running.**
 
-### Step 8: Start Web Frontend
+### Step 7: Start Web Frontend
 
 **New terminal:**
 
@@ -390,280 +360,123 @@ Open your browser to `http://localhost:3000/markets.html` (Market List Page)
 **Features:**
 
 - **Polymarket-style market listing** page showing all available markets
-- **Admin login** button to authenticate and create new markets
+- **MetaMask wallet integration** for authentication and transactions
+- **Connect wallet** button in header showing address and balance when connected
+- **Auto-detect admin status** based on connected wallet
 - **Market cards** with title, description, volume, and status
 - **Click any market** to navigate to the voting page
 - **Dark theme** with teal blue accents
 - **Real-time chart** (per market) showing A-ratio and A-funds-ratio over time
-- **Vote submission** using dropdown of Hardhat accounts (no wallet needed)
+- **Vote submission** using connected MetaMask wallet
+- **Token symbol display** when creating markets
 - **Back button** to return to market list
-- **Finish prediction** button for admin
+- **Finish prediction** button (only visible to admin)
+- **Claim payout** button for winners when market is finished
 
-### Step 9: Admin Login (Create Markets)
+### Step 8: Connect MetaMask Wallet
 
-**IMPORTANT:** To create markets, you must login as admin first!
+**⚠️ IMPORTANT:** Configure MetaMask for BSC Testnet first!
+
+**Add BSC Testnet to MetaMask:**
+
+1. Open MetaMask
+2. Click network dropdown → "Add Network"
+3. Enter these details:
+   - **Network Name**: BSC Testnet
+   - **RPC URL**: https://data-seed-prebsc-1-s1.binance.org:8545/
+   - **Chain ID**: 97
+   - **Currency Symbol**: BNB
+   - **Block Explorer**: https://testnet.bscscan.com/
+
+**Connect to the Frontend:**
 
 1. Open `http://localhost:3000/markets.html`
-2. Click **"Admin Login"** button in the header
-3. Find your admin address in `contract-address.json`:
-   ```bash
-   cat contract-address.json | grep deployer
-   # Copy the address (e.g., 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266)
-   ```
-4. Paste the admin address and click **Login**
-5. You'll see "✓ Admin verified!" and the create market form will appear
-6. Fill in market title and description, click **Create Market**
-7. New market appears in the list!
+2. Click **"Connect Wallet"** button in the header
+3. Approve the connection in MetaMask
+4. Your wallet address and token balance will appear in the header
+5. If you're the admin, you'll see the "Create Market" section
 
-**Note:** Only the admin (deployer) can create markets. Regular users only see the market list and can vote.
+**Note:** The frontend automatically detects if you're the admin (deployer) and shows admin-only features.
 
-### Step 10: Submit Votes (Web UI or Script)
+### Step 9: Submit Votes (Web UI or Script)
 
 #### Option A: Use Web Interface (Recommended)
 
-1. Open `http://localhost:3000/markets.html` to see all markets
-2. Click on a market card to enter the voting page
-3. Select an account from the dropdown
-4. Enter bet amount (e.g., 100 USDC)
-5. Choose Option A or B
-6. Click "Submit Vote"
-7. Watch the chart update every 5 votes!
+1. **Connect your MetaMask wallet** (see Step 8)
+2. Ensure you have:
+   - BNB for gas fees (BSC Testnet)
+   - Payment tokens (USDC/DAI/etc.) for the specific market
+3. Open `http://localhost:3000/markets.html` to see all markets
+4. Click on a market card to enter the voting page
+5. Enter bet amount (e.g., 100 USDC)
+6. Choose Option A or B
+7. Click "Submit Vote"
+8. **Approve the transaction in MetaMask** (2 transactions: token approval + vote)
+9. Watch the chart update every 5 votes!
+
+**Features:**
+- **Token approval**: Automatically prompts to approve token spending
+- **Duplicate vote prevention**: Checks if you've already voted
+- **Real-time balance**: Shows your token balance
+- **Error handling**: Clear error messages for failed transactions
+- **Claim payouts**: After market finishes, winners can claim their share
 
 #### Option B: Use Python Script
 
-**New terminal:**
+**⚠️ IMPORTANT:** Configure your wallet private key first!
+
+**Create a `.env` file** or provide private key when prompted:
 
 ```bash
 python submit_vote_to_contract.py
 ```
 
-**Interactive prompts:**
+The script will:
+- Connect to **BSC Testnet**
+- Load your wallet from private key
+- Show available markets
+- Let you select market, amount, and option
+- Submit the vote on BSC Testnet
 
-```
-📊 Available Markets (1):
-  0. Will ETH reach $10,000 by end of 2025? - Active
-
-Select market (0-0): 0
-
-Available accounts:
-  1. 0x70997970...dc79C8 (10000.00 USDC)
-  2. 0x3C44CdDd...07eAeE (10000.00 USDC)
-  3. 0x90F79bf6...93b906 (10000.00 USDC)
-  ...
-
-Select account (1-5): 1
-
-Bet amount in USDC (e.g., 100): 100
-Bet on (A/B): A
-
-📝 Creating vote for Market #0: 100 USDC on A
-✅ Vote encrypted
-
-> Approving token transfer...
-✓ Token approved
-
-📤 Submitting to contract with 100 USDC...
-   Transaction sent: 0x123abc...
-   Waiting for confirmation...
-✅ Vote submitted successfully!
-   Block: 6
-   Gas used: 127463
-
-👂 The contract listener should now detect and process this vote!
-```
-
-**What happens:**
-
-1. Vote is encrypted with AES-GCM using random symmetric key
-2. Symmetric key is encrypted with master public key (Umbral)
-3. USDC tokens approved for contract to spend
-4. Transaction sent to contract with token amount
-5. Contract emits `VoteSubmitted` event
-6. **Listener processes automatically** (check listener terminal)
-
-**Listener output:**
-
-```
-============================================================
-📥 New Vote Event Detected!
-============================================================
-Market ID: 0
-Voter: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
-Amount: 100 USDC
-Block: 6
-
-📤 Submitting to node for processing...
-  (Node will collect cfrags from all nodes and forward to TEE)
-✅ Vote processed successfully!
-Vote info: {'bet_amount': 100000000000000000, 'bet_on': 'A'}
-Total votes: 1
-🔒 A-ratio hidden for privacy (revealed every 5 votes)
-
-📝 Updating contract state...
-✅ State updated in contract (tx: 0x456def...)
-============================================================
-```
-
-**Privacy Feature:**
-
-- Votes 1-4: A-ratio hidden
-- Vote 5: A-ratio revealed (e.g., 60.00%)
-- Votes 6-9: Hidden again
-- Vote 10: Revealed (e.g., 55.00%)
-
-**Submit multiple votes:**
-
-```bash
-# Run multiple times with different accounts
-python submit_vote_to_contract.py  # Account 2, 200 USDC, B
-python submit_vote_to_contract.py  # Account 3, 150 USDC, A
-python submit_vote_to_contract.py  # Account 4, 300 USDC, B
-python submit_vote_to_contract.py  # Account 5, 50 USDC, A
-```
-
-**After 5th vote:**
-
-```
-📊 A-ratio revealed: 60.00%
-💰 A-funds-ratio revealed: 45.00%
-```
+**Note:** This method requires you to have BNB for gas fees and payment tokens in your wallet.
 
 ### Step 10: Automated Voting (Optional - For Testing)
 
-**For quickly testing with many votes:**
-
-```bash
-python auto_vote.py
-```
-
-**What this does:**
-
-- Automatically votes from accounts 45-65 (configurable)
-- Random amounts between 100-10,000 USDC
-- Strategic distribution:
-  - 65% vote for A (but with smaller bets)
-  - 35% vote for B (but with larger bets)
-  - Creates interesting divergence between vote ratio and funds ratio!
-- 0.5 second delay between votes
-- Shows statistics at the end
-
-**Configuration** (edit `auto_vote.py`):
-
-```python
-MARKET_ID = 0  # Which market to vote on
-START_ACCOUNT = 45
-END_ACCOUNT = 65
-MIN_BET = 100  # USDC
-MAX_BET = 10000  # USDC
-A_VOTE_PROBABILITY = 0.65  # 65% vote A
-A_HIGH_BET_PROBABILITY = 0.3  # 30% of A voters bet high
-B_HIGH_BET_PROBABILITY = 0.7  # 70% of B voters bet high
-```
+**⚠️ Note:** This feature is not recommended for BSC Testnet testing as it requires multiple funded wallets with tokens. Use MetaMask web interface instead.
 
 ### Step 11: Finish Betting and Calculate Payouts
 
 #### Option A: Use Web Interface (Recommended)
 
-1. Click the "🏁 Finish Prediction" button in the web UI
-2. Select the winning option (A or B)
-3. Click "Confirm & Distribute"
-4. Wait for all 3 steps to complete:
-   - Finish betting
-   - Calculate payouts (via TEE)
-   - Set payouts in contract (with automatic batching)
+**Admin only:**
 
-**Note:** With many voters (50+), payouts are automatically batched in groups of 50 to avoid gas limits.
+1. Connect your **admin wallet** via MetaMask
+2. Navigate to the market you want to finish
+3. Click the "🏁 Finish Prediction" button (only visible to admin)
+4. Select the winning option (A or B)
+5. Click "Confirm & Distribute"
+6. **Approve all transactions in MetaMask**:
+   - Transaction 1: Close betting
+   - Transaction 2: Set payouts (may be batched)
+7. Wait for confirmation on BSC Testnet
+8. Market is now finished, winners can claim!
+
+**Note:** With many voters, payouts are automatically batched in groups of 50 to avoid gas limits.
 
 #### Option B: Use Python Script
+
+**⚠️ IMPORTANT:** Requires admin private key in `.env` file!
 
 ```bash
 python finish_and_distribute.py
 ```
 
-**Interactive flow:**
-
-```
-============================================================
-FINISH BETTING AND DISTRIBUTE FUNDS
-============================================================
-✅ Connected to Ethereum node
-✅ Contract loaded: 0x5FbDB2315678afecb367f032d93F642f64180aa3
-
-📊 Available Markets (1):
-  0. Will ETH reach $10,000 by end of 2025? - Active
-
-Select market to finish (0-0): 0
-
-   Admin: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-   Market status: Active
-
-============================================================
-STEP 1: FINISH BETTING
-============================================================
-Finish betting and close submissions? (y/n): y
-
-📝 Calling contract.finishBetting()...
-   Transaction sent: 0x789ghi...
-✅ Betting finished!
-   Block: 11
-
-============================================================
-STEP 2: CALCULATE PAYOUTS
-============================================================
-   Current state length: 450 chars
-
-Enter winning option (A/B): A
-
-📡 Calling TEE to calculate payouts for winner: A
-✅ Payouts calculated!
-   Total pool: 750000000000000000
-   Winners: 3
-   Losers: 2
-
-📊 Payout breakdown:
-------------------------------------------------------------
-   0x70997970...dc79C8: 166666666666666666
-   0x3C44CdDd...07eAeE: 333333333333333333
-   0x90F79bf6...93b906: 250000000000000000
-   0xOther11...111111: 0
-   0xOther22...222222: 0
-------------------------------------------------------------
-
-============================================================
-STEP 3: SET PAYOUTS IN CONTRACT
-============================================================
-
-Set payouts in contract? (y/n): y
-
-📝 Setting payouts for 90 wallets...
-   Using 2 batch(es) of up to 50 addresses each
-
-   Batch 1/2: Setting 50 payouts...
-   Transaction sent: 0xabcdef...
-   ✅ Batch 1 complete!
-   Block: 12
-   Gas used: 3245823
-
-   Batch 2/2: Setting 40 payouts...
-   Transaction sent: 0xfedcba...
-   ✅ Batch 2 complete!
-   Block: 13
-   Gas used: 2598234
-
-✅ All payouts set in contract!
-
-============================================================
-✅ PROCESS COMPLETE!
-============================================================
-
-Winners can now claim their payouts by calling:
-  contract.claimPayout()
-
-Or use the claim script:
-  python claim_payout.py
-
-Contract balance: 750 USDC
-```
+The script will:
+- Connect to **BSC Testnet**
+- Use admin private key to send transactions
+- Close betting on the selected market
+- Calculate payouts via TEE
+- Set payouts in contract (with automatic batching)
 
 **Payout Calculation:**
 
@@ -671,76 +484,41 @@ Contract balance: 750 USDC
 - Formula: `payout = (your_stake / total_winner_stakes) × total_pool`
 - Losers get 0
 
-**Example:**
-
-```
-Total pool: 750 USDC
-Winners (voted A):
-  - Account 1: 100 USDC stake
-  - Account 3: 200 USDC stake
-  - Account 5: 150 USDC stake
-  Total winner stakes: 450 USDC
-
-Payouts:
-  - Account 1: (100/450) × 750 = 166.67 USDC
-  - Account 3: (200/450) × 750 = 333.33 USDC
-  - Account 5: (150/450) × 750 = 250.00 USDC
-```
-
 ### Step 12: Claim Winnings
+
+#### Option A: Use Web Interface (Recommended)
+
+**Winners only:**
+
+1. Connect your wallet via MetaMask (the one you voted with)
+2. Navigate to the finished market
+3. If you're a winner, you'll see:
+   - Your claimable amount
+   - "Claim Payout" button
+   - Claim status (claimed/unclaimed)
+4. Click "Claim Payout"
+5. **Approve the transaction in MetaMask**
+6. Tokens will be transferred to your wallet!
+
+**Features:**
+- **Auto-detection**: Shows claim info only if you're a winner
+- **Claim status**: Shows if you've already claimed
+- **Real-time balance**: Updates after claiming
+
+#### Option B: Use Python Script
+
+**⚠️ IMPORTANT:** Requires your wallet private key!
 
 ```bash
 python claim_payout.py
 ```
 
-**Interactive flow:**
-
-```
-============================================================
-CLAIM PAYOUT FROM CONTRACT
-============================================================
-✅ Connected to Ethereum node
-✅ Contract loaded: 0x5FbDB2315678afecb367f032d93F642f64180aa3
-✅ Token loaded: 0x5FbDB2315678afecb367f032d93F642f64180aa3
-
-📊 Available Markets (1):
-  0. Will ETH reach $10,000 by end of 2025? - Payouts Set
-
-Select market to claim from (0-0): 0
-
-Accounts with payouts for Market #0:
-------------------------------------------------------------
-  1. 0x70997970...dc79C8
-      Payout: 166.67 USDC - 💰 Available
-  2. 0x3C44CdDd...07eAeE
-      Payout: 333.33 USDC - 💰 Available
-  3. 0x90F79bf6...93b906
-      Payout: 250.00 USDC - 💰 Available
-------------------------------------------------------------
-
-Select account to claim (1-3): 1
-
-📊 Account balance before: 9900.00 USDC
-   Payout amount: 166.67 USDC
-
-Claim payout? (y/n): y
-
-📝 Claiming payout...
-   Transaction sent: 0xfedcba...
-✅ Payout claimed successfully!
-   Block: 13
-   Gas used: 57135
-
-📊 Account balance after: 10066.67 USDC
-   Net change: +166.67 USDC
-```
-
-**Run again for other winners:**
-
-```bash
-python claim_payout.py  # Claim for account 2
-python claim_payout.py  # Claim for account 3
-```
+The script will:
+- Connect to **BSC Testnet**
+- Load your wallet from private key (from `.env` or prompt)
+- Show markets where you have unclaimed payouts
+- Let you claim your winnings
+- Transaction sent on BSC Testnet
 
 ## Project Structure
 
@@ -791,31 +569,39 @@ private-market-prediction/
 
 ### ERC20 Token Support
 
-- **Uses USDC tokens** instead of native ETH for betting
-- **MockUSDC contract** for testing (ERC20 with 18 decimals)
+- **Per-market payment tokens** - Each market can use different ERC20 tokens (USDC, DAI, etc.)
+- **Token address specified** when creating a market
 - **Automatic token approval** in all Python scripts and frontend
-- **10,000 USDC minted** to 50 test accounts on deployment
-- **Token balance tracking** throughout the system
+- **Token symbol display** when creating markets (fetched from blockchain)
+- **Real-time balance tracking** for connected wallets
+- **Multi-token support** - Different markets can use different tokens
 
 ### Multi-Market Architecture
 
 - **Single contract handles multiple markets** - No need to deploy per market
-- **Admin creates markets** via authenticated API or frontend
-- **Market struct** with id, title, description, state, status, volume, timestamp
+- **Admin creates markets** via MetaMask wallet
+- **Market struct** with id, title, description, state, status, volume, timestamp, **and payment token address**
 - **Independent market states** - Each market has its own encrypted state and payouts
 - **Market-specific history** - Separate ratio history files per market
 - **Polymarket-style UI** - Browse all markets on landing page
 
 ### Web Frontend
 
+- **MetaMask wallet integration** - No predefined accounts, real wallet interaction
+- **Connect/disconnect wallet** - Persistent connection with auto-reconnect
+- **Wallet info display** - Shows connected address (truncated) and token balance
+- **Admin auto-detection** - Features appear based on connected wallet
 - **Two-page structure**: Market list (home) + Market voting (per market)
-- **Admin authentication** - Login required to create markets
 - **Market cards** showing title, description, volume, status, creation date
 - **Dark theme** with teal blue and cyan accents
 - **Dual-metric visualization**: A-ratio (vote %) and A-funds-ratio (funds %)
 - **Real-time chart** with Chart.js showing historical trends per market
-- **Account dropdown** supporting up to 50 Hardhat accounts with USDC balances
-- **Admin controls** for finishing predictions and distributing payouts
+- **Token symbol fetching** when creating markets
+- **Duplicate vote prevention** - Checks if user already voted
+- **Claim functionality** - Winners can claim payouts directly from UI
+- **Network detection** - Prompts to switch to BSC Testnet if on wrong network
+- **Error handling** - Clean error messages for failed transactions
+- **Skeleton loading** - Shows loading state while fetching data
 - **Responsive design** with full-width chart display
 - **Navigation** between market list and voting pages
 
@@ -826,23 +612,15 @@ private-market-prediction/
 - **Handles unlimited voters**: No more "out of gas" errors with many participants
 - **Smart chart updates**: Only redraws when data changes (no flickering)
 
-### Testing Tools
-
-- **auto_vote.py**: Automated voting with strategic distribution
-  - Target specific market with MARKET_ID configuration
-  - Configurable vote bias (default: 65% vote A, 35% vote B)
-  - Different betting strategies (A voters bet small, B voters bet large)
-  - Creates interesting divergence between the two metrics
-  - Adjustable parameters for custom scenarios
-  - Bet ranges: 100-10,000 USDC
-
 ### Admin Features
 
-- **Admin authentication** - Only contract admin can create markets
-- **Address verification** - Backend validates admin address against contract
-- **Session management** - Admin login persisted in localStorage
-- **Market creation API** - Protected endpoint with 403 for non-admins
-- **Visual indicators** - Admin status shown in header when logged in
+- **MetaMask-based authentication** - Admin detected by wallet address
+- **Address verification** - Backend validates admin address against contract deployer
+- **No manual login** - Just connect wallet, admin features appear automatically
+- **Market creation** - Create markets with custom title, description, and payment token
+- **Finish prediction** - Close betting and distribute payouts
+- **Admin-only UI** - Finish button only visible to admin
+- **Multi-step workflow** - Automated finish → calculate → set payouts process
 
 ### TEE Signature Verification
 
@@ -856,7 +634,7 @@ private-market-prediction/
 
 ## Security Considerations
 
-### Current Implementation (Development)
+### Current Implementation
 
 - ✅ Threshold encryption protects against node compromise
 - ✅ Forward secrecy prevents historical decryption
@@ -867,11 +645,13 @@ private-market-prediction/
 - ✅ **TEE signature verification** - All state updates cryptographically verified
 - ✅ **ECDSA signature checking** - Contract verifies TEE signed each transition
 - ✅ **TEE address enforcement** - Only valid TEE signatures accepted
+- ✅ **MetaMask wallet integration** - Real wallet transactions with user approval
+- ✅ **BSC Testnet deployment** - Tested on public testnet
+- ✅ **Per-market payment tokens** - Flexible token support
+- ✅ **Duplicate vote prevention** - Checks voting status before submission
 - ⚠️  TEE is mocked (no hardware isolation)
 - ⚠️  Anyone can relay updates (but must have valid TEE signature)
-- ⚠️  Local development network (no real stakes)
-- ⚠️  Frontend uses predefined accounts (no wallet integration)
-- ⚠️  MockUSDC for testing only (not production-ready)
+- ⚠️  Testnet deployment (not mainnet-ready)
 
 ### Production Requirements
 
@@ -898,9 +678,10 @@ private-market-prediction/
    - Distributed node operators
 
 5. **Token Integration**
-   - Use production ERC20 tokens (real USDC with 6 decimals)
-   - Proper token allowance handling
+   - ✅ Support for any ERC20 token (per market)
+   - ✅ Proper token allowance handling in frontend
    - Token balance checks before voting
+   - Support for tokens with 6 decimals (real USDC)
 
 6. **Multi-Market Security**
    - Market-specific access controls
@@ -908,69 +689,95 @@ private-market-prediction/
    - Market state isolation (prevent cross-market attacks)
    - Rate limiting for market creation
 
-7. **Additional Features**
+7. **Wallet Integration**
+   - ✅ MetaMask wallet connection with auto-reconnect
+   - ✅ Network detection and switching prompts
+   - ✅ Transaction approval flow
+   - Hardware wallet support (Ledger, Trezor)
+   - WalletConnect for mobile wallets
+
+8. **Additional Features**
    - Time-based betting windows per market
    - Minimum/maximum bet limits per market
    - Emergency pause mechanism per market
    - Upgrade mechanisms with proxy pattern
    - Market categories and tagging
    - Market search and filtering
+   - Market resolution system with dispute mechanism
 
 ## Quick Start (All-in-One)
 
-For the complete setup with web frontend:
+For the complete setup with web frontend on BSC Testnet:
+
+**Prerequisites:**
+- Create `.env` file with `ADMIN_PRIVATE_KEY=your_private_key`
+- Add BSC Testnet to MetaMask (see Step 8)
+- Have BNB for gas fees and payment tokens (USDC/DAI/etc.)
+
+**Start all services:**
 
 1. **Terminal 1**: `python -m uvicorn tee:app`
 2. **Terminal 2**: `cd kd && python kd.py` (paste TEE key, then exit)
 3. **Terminal 3**: `cd nodes && python run_nodes.py`
-4. **Terminal 4**: `npm run node`
-5. **Terminal 5**: `npx hardhat run scripts/deploy-with-tee.js --network localhost`
-6. **Terminal 6**: `python contract_listener.py`
-7. **Terminal 7**: `python frontend_api.py`
-8. **Terminal 8**: `cd front-end && npm install && npm run dev`
-9. **Browser**: Open `http://localhost:3000/markets.html`
-10. **Admin Login**: Click "Admin Login", paste admin address from `contract-address.json`
+4. **Terminal 4**: `python contract_listener.py` (listens to BSC Testnet)
+5. **Terminal 5**: `python frontend_api.py` (connects to BSC Testnet)
+6. **Terminal 6**: `cd front-end && npm install && npm run dev`
+7. **Browser**: Open `http://localhost:3000/markets.html`
+8. **MetaMask**: Click "Connect Wallet" button in header
+9. **Create/Vote**: If you're admin, create markets. Otherwise, vote on existing markets!
 
 ## Testing
 
-### Unit Tests
+### BSC Testnet Testing
 
-```bash
-# Test contract with mock data
-npx hardhat run scripts/test-contract.js --network localhost
-```
+**The project is deployed and running on BSC Testnet. Test by:**
+
+1. **Get BSC Testnet BNB**: Use a faucet like https://testnet.binance.org/faucet-smart
+2. **Get payment tokens**: Acquire testnet USDC/DAI or use test tokens
+3. **Connect MetaMask**: Add BSC Testnet network to MetaMask
+4. **Access frontend**: Open `http://localhost:3000/markets.html`
+5. **Test the flow**:
+   - Connect wallet
+   - Create a market (if admin)
+   - Submit votes with your wallet
+   - Wait for state updates (listener processes on BSC)
+   - Finish prediction (if admin)
+   - Claim payouts (if winner)
 
 ### What to Expect
 
-- ✅ Single contract deployed supporting multiple markets
-- ✅ MockUSDC token deployed with 10,000 USDC per test account
-- ✅ Default test market created automatically on deployment
-- ✅ Admin can login and create additional markets
+- ✅ Single contract deployed on BSC Testnet supporting multiple markets
+- ✅ Each market uses its own ERC20 payment token (specified at creation)
+- ✅ MetaMask wallet integration for all transactions
+- ✅ Admin auto-detected based on connected wallet
 - ✅ Users browse markets on Polymarket-style landing page
 - ✅ Click market card to navigate to voting page
-- ✅ Votes submitted via web UI or CLI with USDC tokens
-- ✅ Automatic token approval before voting
-- ✅ Listener processes votes automatically per market
+- ✅ Votes submitted via MetaMask with token approval
+- ✅ Listener processes votes automatically on BSC Testnet
 - ✅ A-ratio and A-funds-ratio revealed every 5 votes per market
 - ✅ Real-time chart updates showing both metrics per market
-- ✅ Divergence between vote count and funds (with auto_vote.py)
+- ✅ Duplicate vote prevention (checks if already voted)
 - ✅ Corrupt nodes don't break the system
 - ✅ Automatic batching handles 100+ voters per market
-- ✅ Winners can claim their proportional USDC share per market
+- ✅ Winners can claim their proportional share via UI
 - ✅ Losers get 0
 - ✅ Contract token balance depletes as winners claim
-- ✅ Multiple markets can run simultaneously
+- ✅ Multiple markets can run simultaneously with different tokens
 - ✅ TEE signatures verified on-chain for all state transitions
 - ✅ Cryptographic proof of TEE involvement in every update
+- ✅ Network detection prompts user to switch to BSC Testnet
+- ✅ Clean error handling for failed transactions
 
 ## ⚠️ Disclaimer
 
-**This is a proof-of-concept for educational purposes.**
+**This is a proof-of-concept for educational and testing purposes.**
 
 - Do NOT use in production without proper security audits
 - The TEE is mocked (no real hardware isolation)
-- Local development only (not real money)
+- Currently on testnet (BSC Testnet) - not production-ready
+- Test tokens only (no real money at risk)
 - No warranties or guarantees provided
+- Use at your own risk
 
 ## 📚 Technical References
 
