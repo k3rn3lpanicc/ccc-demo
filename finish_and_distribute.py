@@ -38,7 +38,7 @@ def main():
     for i in range(market_count):
         market = contract.functions.getMarket(i).call()
         title = market[1]
-        status = market[4]
+        status = market[5]
         status_text = ["Active", "Finished", "Payouts Set"][status]
         print(f"  {i}. {title} - {status_text}")
     
@@ -56,7 +56,7 @@ def main():
     print(f"   Admin: {admin}")
 
     market = contract.functions.getMarket(market_id).call()
-    status = market[4]
+    status = market[5]
     status_names = ["Active", "Finished", "PayoutsSet"]
     print(f"   Market status: {status_names[status]}")
 

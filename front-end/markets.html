@@ -55,6 +55,12 @@
             <textarea id="market-description" rows="3" placeholder="Provide details about the prediction..." required></textarea>
           </div>
 
+          <div class="form-group">
+            <label for="market-token">Token Address (ERC20):</label>
+            <input type="text" id="market-token" placeholder="0x... (e.g., USDC, DAI)" required />
+            <small style="color: #888; display: block; margin-top: 4px;">Enter the ERC20 token contract address for this market</small>
+          </div>
+
           <button type="submit" id="create-market-button" class="btn-primary">
             Create Market
           </button>

@@ -132,7 +132,6 @@ def main():
     with open(CONTRACT_ADDRESS_FILE, 'r') as f:
         contract_info = json.load(f)
         contract_address = contract_info['address']
-        token_address = contract_info['tokenAddress']
 
     with open(CONTRACT_ABI_FILE, 'r') as f:
         contract_abi = json.load(f)
@@ -145,13 +144,16 @@ def main():
         abi=contract_abi
     )
 
+    print(f"✓ Contract loaded: {contract_address}")
+    
+    # Get the token for the selected market
+    token_address = contract.functions.getTokenAddress(MARKET_ID).call()
     token = w3.eth.contract(
         address=Web3.to_checksum_address(token_address),
         abi=token_abi
     )
-
-    print(f"✓ Contract loaded: {contract_address}")
-    print(f"✓ Token loaded: {token_address}")
+    
+    print(f"✓ Market #{MARKET_ID} token loaded: {token_address}")
 
     # Load master key
     master_public_key = load_master_key()
