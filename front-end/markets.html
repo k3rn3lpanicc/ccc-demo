@@ -11,35 +11,21 @@
 <body>
   <div id="app">
     <header class="header">
-      <h1>Private Market Prediction</h1>
-      <p class="subtitle">Browse and participate in prediction markets</p>
-      <div class="admin-section">
-        <button id="admin-login-btn" class="btn-secondary">Admin Login</button>
+      <div class="header-content">
+        <div class="header-left">
+          <h1>Private Market Prediction</h1>
+          <p class="subtitle">Browse and participate in prediction markets</p>
+        </div>
+        <div class="header-right">
+          <button type="button" id="wallet-connect-btn" class="wallet-btn">
+            <span class="wallet-icon">🦊</span>
+            <span class="wallet-text">Connect Wallet</span>
+          </button>
+        </div>
       </div>
     </header>
 
     <div class="container">
-      <!-- Admin Login Modal -->
-      <div id="admin-login-modal" class="modal-overlay">
-        <div class="modal">
-          <h2>🔐 Admin Login</h2>
-          <div class="modal-content">
-            <p style="color: #8ab4f8; text-align: center; margin-bottom: 20px;">
-              Connect your wallet to verify admin access
-            </p>
-            <button id="metamask-login" class="btn-primary" style="width: 100%;">
-              🦊 Connect with MetaMask
-            </button>
-            <div id="login-result" class="vote-result" style="margin-top: 15px;"></div>
-          </div>
-          <div class="modal-buttons">
-            <button id="cancel-login" class="btn-danger">
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-
       <!-- Create Market Section (Admin Only) -->
       <div class="card create-market-card" id="create-market-section" style="display: none;">
         <h2>Create New Market</h2>

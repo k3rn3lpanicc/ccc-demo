@@ -85,8 +85,7 @@ async function loadMarketDetails() {
 
 // Connect to MetaMask
 async function connectWallet() {
-	const connectBtn = document.getElementById('connect-wallet-btn') as HTMLButtonElement;
-	const walletInfo = document.getElementById('wallet-info')!;
+	const connectBtn = document.getElementById('wallet-connect-btn') as HTMLButtonElement;
 	const voteForm = document.getElementById('vote-form') as HTMLFormElement;
 
 	try {
@@ -111,21 +110,13 @@ async function connectWallet() {
 		userAddress = accounts[0];
 		signer = await provider.getSigner();
 
+		// Update button to show connected state
+		updateWalletButton(userAddress, null, null);
+		enableVoteForm();
+
 		// Check if we have a market and token address
 		if (!currentMarket || !currentMarket.tokenAddress || currentMarket.tokenAddress === '0x0000000000000000000000000000000000000000') {
 			// No token yet, just show connected
-			walletInfo.innerHTML = `
-				<div class="wallet-connected">
-					<div class="wallet-address">
-						<strong>Connected:</strong> ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}
-					</div>
-				</div>
-			`;
-			connectBtn.textContent = 'Disconnect';
-			connectBtn.classList.add('connected');
-			voteForm.style.display = 'block';
-			
-			// Check if user is admin
 			await checkAdminStatus();
 			return;
 		}
@@ -145,39 +136,17 @@ async function connectWallet() {
 			const symbol = await tokenContract.symbol();
 			userBalance = ethers.formatEther(balance);
 
-			// Update UI
-			walletInfo.innerHTML = `
-				<div class="wallet-connected">
-					<div class="wallet-address">
-						<strong>Connected:</strong> ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}
-					</div>
-					<div class="wallet-balance">
-						<strong>Balance:</strong> ${parseFloat(userBalance).toFixed(2)} ${symbol}
-					</div>
-				</div>
-			`;
-			connectBtn.textContent = 'Disconnect';
-			connectBtn.classList.add('connected');
-			voteForm.style.display = 'block';
+			// Update button with balance
+			updateWalletButton(userAddress, parseFloat(userBalance).toFixed(2), symbol);
+			enableVoteForm();
 			
 			// Check if user is admin
 			await checkAdminStatus();
 		} catch (tokenError) {
 			console.error('Token error:', tokenError);
 			// Still show connected even if token check fails
-			walletInfo.innerHTML = `
-				<div class="wallet-connected">
-					<div class="wallet-address">
-						<strong>Connected:</strong> ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}
-					</div>
-					<div class="wallet-balance">
-						<strong>Balance:</strong> Unable to load
-					</div>
-				</div>
-			`;
-			connectBtn.textContent = 'Disconnect';
-			connectBtn.classList.add('connected');
-			voteForm.style.display = 'block';
+			updateWalletButton(userAddress, null, null);
+			enableVoteForm();
 			
 			// Check if user is admin
 			await checkAdminStatus();
@@ -207,6 +176,58 @@ async function connectWallet() {
 	}
 }
 
+// Update wallet button display
+function updateWalletButton(address: string, balance: string | null, symbol: string | null) {
+	const connectBtn = document.getElementById('wallet-connect-btn') as HTMLButtonElement;
+	
+	if (balance && symbol) {
+		// Show address and balance
+		connectBtn.innerHTML = `
+			<span class="wallet-icon">🦊</span>
+			<div class="wallet-info">
+				<div class="wallet-address">${address.slice(0, 6)}...${address.slice(-4)}</div>
+				<div class="wallet-balance">${balance} ${symbol}</div>
+			</div>
+		`;
+	} else {
+		// Show just address
+		connectBtn.innerHTML = `
+			<span class="wallet-icon">🦊</span>
+			<span class="wallet-text">${address.slice(0, 6)}...${address.slice(-4)}</span>
+		`;
+	}
+	
+	connectBtn.classList.add('connected');
+}
+
+// Enable vote form when wallet connected
+function enableVoteForm() {
+	const walletPrompt = document.getElementById('wallet-connect-prompt')!;
+	const betAmount = document.getElementById('bet-amount') as HTMLInputElement;
+	const voteButton = document.getElementById('vote-button') as HTMLButtonElement;
+	const radioOptions = document.querySelectorAll('input[name="vote-option"]');
+	
+	walletPrompt.style.display = 'none';
+	betAmount.disabled = false;
+	voteButton.disabled = false;
+	voteButton.textContent = 'Submit Vote';
+	radioOptions.forEach((radio: any) => radio.disabled = false);
+}
+
+// Disable vote form when wallet disconnected
+function disableVoteForm() {
+	const walletPrompt = document.getElementById('wallet-connect-prompt')!;
+	const betAmount = document.getElementById('bet-amount') as HTMLInputElement;
+	const voteButton = document.getElementById('vote-button') as HTMLButtonElement;
+	const radioOptions = document.querySelectorAll('input[name="vote-option"]');
+	
+	walletPrompt.style.display = 'block';
+	betAmount.disabled = true;
+	voteButton.disabled = true;
+	voteButton.textContent = 'Connect Wallet to Vote';
+	radioOptions.forEach((radio: any) => radio.disabled = true);
+}
+
 // Disconnect wallet
 function disconnectWallet() {
 	userAddress = null;
@@ -214,14 +235,14 @@ function disconnectWallet() {
 	provider = null;
 	userBalance = '0';
 
-	const connectBtn = document.getElementById('connect-wallet-btn') as HTMLButtonElement;
-	const walletInfo = document.getElementById('wallet-info')!;
-	const voteForm = document.getElementById('vote-form') as HTMLFormElement;
+	const connectBtn = document.getElementById('wallet-connect-btn') as HTMLButtonElement;
 
-	walletInfo.innerHTML = '';
-	connectBtn.textContent = 'Connect Wallet';
+	connectBtn.innerHTML = `
+		<span class="wallet-icon">🦊</span>
+		<span class="wallet-text">Connect Wallet</span>
+	`;
 	connectBtn.classList.remove('connected');
-	voteForm.style.display = 'none';
+	disableVoteForm();
 	isAdmin = false;
 	updateFinishButtonVisibility();
 }
@@ -682,12 +703,15 @@ async function init() {
 	updateFinishButtonVisibility();
 
 	// Setup wallet connection
-	const connectBtn = document.getElementById('connect-wallet-btn') as HTMLButtonElement;
-	connectBtn.addEventListener('click', () => {
+	const connectBtn = document.getElementById('wallet-connect-btn') as HTMLButtonElement;
+	connectBtn.addEventListener('click', async () => {
 		if (userAddress) {
-			disconnectWallet();
+			// Ask for confirmation before disconnecting
+			if (confirm('Disconnect wallet?')) {
+				disconnectWallet();
+			}
 		} else {
-			connectWallet();
+			await connectWallet();
 		}
 	});
 

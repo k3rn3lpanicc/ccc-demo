@@ -11,8 +11,18 @@
 <body>
   <div id="app">
     <header class="header">
-      <h1>Private Market Prediction</h1>
-      <p class="subtitle">Privacy-Preserving Betting System with Threshold Encryption</p>
+      <div class="header-content">
+        <div class="header-left">
+          <h1>Private Market Prediction</h1>
+          <p class="subtitle">Privacy-Preserving Betting System with Threshold Encryption</p>
+        </div>
+        <div class="header-right">
+          <button type="button" id="wallet-connect-btn" class="wallet-btn">
+            <span class="wallet-icon">🦊</span>
+            <span class="wallet-text">Connect Wallet</span>
+          </button>
+        </div>
+      </div>
     </header>
 
     <div class="container">
@@ -44,42 +54,40 @@
         <!-- Voting Form -->
         <div class="card vote-card">
           <h2>Cast Your Vote</h2>
-          
-          <!-- Wallet Connection -->
-          <div class="wallet-section">
-            <button type="button" id="connect-wallet-btn" class="btn-primary">Connect Wallet</button>
-            <div id="wallet-info"></div>
+
+          <div id="wallet-connect-prompt" class="wallet-prompt">
+            <p>Please connect your wallet to vote</p>
           </div>
 
-          <form id="vote-form" style="display: none;">
+          <form id="vote-form">
             <div class="form-group">
               <label for="bet-amount">Bet Amount:</label>
-              <input type="number" id="bet-amount" step="1" min="1" value="100" required />
+              <input type="number" id="bet-amount" step="1" min="1" value="100" required disabled />
             </div>
 
             <div class="form-group">
               <label>Vote For:</label>
               <div class="radio-group">
                 <label class="radio-label">
-                  <input type="radio" name="vote-option" value="A" checked />
+                  <input type="radio" name="vote-option" value="A" checked disabled />
                   <span class="radio-text">Option A</span>
                 </label>
                 <label class="radio-label">
-                  <input type="radio" name="vote-option" value="B" />
+                  <input type="radio" name="vote-option" value="B" disabled />
                   <span class="radio-text">Option B</span>
                 </label>
               </div>
             </div>
 
-            <button type="submit" id="vote-button" class="btn-primary">
-              Submit Vote
+            <button type="submit" id="vote-button" class="btn-primary" disabled>
+              Connect Wallet to Vote
             </button>
 
             <div id="vote-result" class="vote-result"></div>
           </form>
 
           <div class="finish-section">
-            <button id="finish-button" class="btn-danger">
+            <button id="finish-button" class="btn-danger" style="display: none;">
               Finish Prediction
             </button>
           </div>

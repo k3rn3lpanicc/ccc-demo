@@ -47,24 +47,93 @@ body {
 }
 
 .header {
-	text-align: center;
-	padding: 40px 20px;
+	padding: 20px 40px;
 	border-bottom: 2px solid var(--border-color);
 	margin-bottom: 40px;
 	background: linear-gradient(180deg, var(--bg-secondary) 0%, transparent 100%);
 }
 
+.header-content {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 20px;
+}
+
+.header-left {
+	flex: 1;
+}
+
+.header-right {
+	display: flex;
+	align-items: center;
+}
+
 .header h1 {
-	font-size: 2.5rem;
+	font-size: 2rem;
 	color: var(--color-primary);
 	text-shadow: var(--glow);
-	margin-bottom: 10px;
+	margin-bottom: 5px;
 	letter-spacing: 2px;
 }
 
 .subtitle {
 	color: var(--color-text-dim);
-	font-size: 1rem;
+	font-size: 0.9rem;
+}
+
+/* Wallet Button */
+.wallet-btn {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 24px;
+	background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+	border: none;
+	border-radius: 12px;
+	color: #000;
+	font-weight: bold;
+	font-size: 14px;
+	cursor: pointer;
+	transition: all 0.3s ease;
+	box-shadow: var(--shadow);
+	font-family: 'Courier New', monospace;
+}
+
+.wallet-btn:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 6px 25px rgba(0, 217, 255, 0.4);
+}
+
+.wallet-btn.connected {
+	background: linear-gradient(135deg, #1a4d5e, #0d1117);
+	color: var(--color-primary);
+	border: 2px solid var(--color-primary);
+}
+
+.wallet-icon {
+	font-size: 20px;
+}
+
+.wallet-text {
+	white-space: nowrap;
+}
+
+.wallet-info {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 2px;
+	font-size: 12px;
+}
+
+.wallet-address {
+	color: var(--color-text);
+	font-weight: bold;
+}
+
+.wallet-balance {
+	color: var(--color-text-dim);
 }
 
 .container {
@@ -163,6 +232,17 @@ body {
 /* Vote Card */
 .vote-card {
 	background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
+}
+
+.wallet-prompt {
+	text-align: center;
+	padding: 15px;
+	margin-bottom: 20px;
+	background: rgba(0, 168, 255, 0.1);
+	border: 2px solid var(--color-primary);
+	border-radius: 8px;
+	color: var(--color-primary);
+	font-weight: bold;
 }
 
 .form-group {
