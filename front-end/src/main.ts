@@ -43,6 +43,8 @@ let signer: ethers.Signer | null = null;
 let userAddress: string | null = null;
 let userBalance: string = '0';
 let isAdmin: boolean = false;
+let userClaimAmount: bigint = BigInt(0);
+let userHasClaimed: boolean = false;
 
 // Load market details
 async function loadMarketDetails() {
@@ -129,6 +131,7 @@ async function connectWallet() {
 		) {
 			// No token yet, just show connected
 			await checkAdminStatus();
+			await checkClaimStatus();
 			return;
 		}
 
@@ -153,6 +156,9 @@ async function connectWallet() {
 
 			// Check if user is admin
 			await checkAdminStatus();
+
+			// Check claim status
+			await checkClaimStatus();
 		} catch (tokenError) {
 			console.error('Token error:', tokenError);
 			// Still show connected even if token check fails
@@ -161,6 +167,9 @@ async function connectWallet() {
 
 			// Check if user is admin
 			await checkAdminStatus();
+
+			// Check claim status
+			await checkClaimStatus();
 		}
 	} catch (error: any) {
 		console.error('Failed to connect wallet:', error);
@@ -284,6 +293,76 @@ function updateFinishButtonVisibility() {
 	const finishButton = document.getElementById('finish-button');
 	if (finishButton) {
 		finishButton.style.display = isAdmin ? 'inline-block' : 'none';
+	}
+}
+
+// Check claim status for connected user
+async function checkClaimStatus() {
+	if (!userAddress || !currentMarket) {
+		hideClaimSection();
+		return;
+	}
+
+	// Only show claim section if market is finished
+	if (!currentMarket.bettingFinished) {
+		hideClaimSection();
+		return;
+	}
+
+	try {
+		const contractAbiResponse = await fetch('/contract-abi.json');
+		const contractAbi = await contractAbiResponse.json();
+
+		const addressResponse = await fetch('/contract-address.json');
+		const addressData = await addressResponse.json();
+		const contractAddress = addressData.address;
+
+		const contract = new ethers.Contract(contractAddress, contractAbi, provider);
+
+		// Get payout amount and claim status
+		userClaimAmount = await contract.getPayoutAmount(MARKET_ID, userAddress);
+		userHasClaimed = await contract.hasClaimedPayout(MARKET_ID, userAddress);
+
+		if (userClaimAmount > BigInt(0)) {
+			showClaimSection();
+		} else {
+			hideClaimSection();
+		}
+	} catch (error) {
+		console.error('Failed to check claim status:', error);
+		hideClaimSection();
+	}
+}
+
+// Show claim section with info
+function showClaimSection() {
+	const claimSection = document.getElementById('claim-section')!;
+	const claimInfo = document.getElementById('claim-info')!;
+	const claimButton = document.getElementById('claim-button') as HTMLButtonElement;
+
+	claimSection.style.display = 'block';
+
+	const claimAmountFormatted = ethers.formatEther(userClaimAmount);
+
+	if (userHasClaimed) {
+		claimInfo.innerHTML = `
+			<p class="claim-claimed">✓ You have already claimed your payout of <strong>${parseFloat(claimAmountFormatted).toFixed(4)}</strong> tokens</p>
+		`;
+		claimButton.style.display = 'none';
+	} else {
+		claimInfo.innerHTML = `
+			<p class="claim-available">💰 You have <strong>${parseFloat(claimAmountFormatted).toFixed(4)}</strong> tokens available to claim!</p>
+		`;
+		claimButton.style.display = 'inline-block';
+		claimButton.disabled = false;
+	}
+}
+
+// Hide claim section
+function hideClaimSection() {
+	const claimSection = document.getElementById('claim-section');
+	if (claimSection) {
+		claimSection.style.display = 'none';
 	}
 }
 
@@ -738,6 +817,112 @@ async function handleFinishPrediction() {
 	confirmButton.onclick = confirmHandler;
 }
 
+// Handle claim payout
+async function handleClaimPayout() {
+	if (!signer || !userAddress || !currentMarket) {
+		alert('Please connect your wallet first!');
+		return;
+	}
+
+	const claimButton = document.getElementById('claim-button') as HTMLButtonElement;
+	const resultDiv = document.getElementById('claim-result')!;
+
+	// Show loading state
+	claimButton.disabled = true;
+	claimButton.textContent = 'Processing...';
+	resultDiv.className = 'vote-result loading show';
+	resultDiv.textContent = 'Checking network...';
+
+	try {
+		// Check if on BSC Testnet
+		const network = await provider!.getNetwork();
+		const chainId = Number(network.chainId);
+
+		if (chainId !== 97) {
+			throw new Error(
+				`Wrong network! Please switch MetaMask to BSC Testnet (Chain ID: 97).\n\nCurrent network: ${chainId}`
+			);
+		}
+
+		resultDiv.textContent = 'Preparing claim transaction...';
+
+		// Load contract ABI
+		const contractAbiResponse = await fetch('/contract-abi.json');
+		const contractAbi = await contractAbiResponse.json();
+
+		const addressResponse = await fetch('/contract-address.json');
+		const addressData = await addressResponse.json();
+		const contractAddress = addressData.address;
+
+		const tokenAbiResponse = await fetch('/token-abi.json');
+		const tokenAbi = await tokenAbiResponse.json();
+
+		// Create contract instances
+		const contract = new ethers.Contract(contractAddress, contractAbi, signer);
+		const token = new ethers.Contract(currentMarket.tokenAddress, tokenAbi, provider);
+
+		// Get balance before
+		const balanceBefore = await token.balanceOf(userAddress);
+
+		resultDiv.textContent = 'Claiming payout (confirm transaction)...';
+
+		// Submit claim transaction
+		const tx = await contract.claimPayout(MARKET_ID);
+
+		resultDiv.textContent = 'Waiting for transaction confirmation...';
+		const receipt = await tx.wait();
+
+		// Get balance after
+		const balanceAfter = await token.balanceOf(userAddress);
+		const claimed = balanceAfter - balanceBefore;
+
+		resultDiv.className = 'vote-result success show';
+		resultDiv.innerHTML = `
+			✓ Payout claimed successfully!<br>
+			<small>Amount: ${ethers.formatEther(claimed)} tokens</small><br>
+			<small>Tx: ${receipt.hash.slice(0, 20)}...</small><br>
+			<small>Block: ${receipt.blockNumber}</small>
+		`;
+
+		// Update claim status
+		userHasClaimed = true;
+		showClaimSection();
+
+		// Refresh balance
+		setTimeout(() => {
+			connectWallet();
+		}, 2000);
+	} catch (error: any) {
+		console.error('Claim error:', error);
+		resultDiv.className = 'vote-result error show';
+
+		// Clean error message handling
+		let errorMessage = 'Failed to claim payout';
+
+		if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+			errorMessage = 'Transaction cancelled by user';
+		} else if (error.message) {
+			if (error.message.includes('user rejected')) {
+				errorMessage = 'Transaction cancelled by user';
+			} else if (error.message.includes('Already claimed')) {
+				errorMessage = 'Payout already claimed';
+			} else if (error.message.includes('No payout')) {
+				errorMessage = 'No payout available';
+			} else if (error.message.includes('Wrong network')) {
+				errorMessage = error.message;
+			} else if (error.message.length < 100) {
+				errorMessage = error.message;
+			} else {
+				errorMessage = 'Claim failed. Check console for details';
+			}
+		}
+
+		resultDiv.textContent = `✗ ${errorMessage}`;
+		claimButton.disabled = false;
+		claimButton.textContent = 'Claim Payout';
+	}
+}
+
 // Initialize
 async function init() {
 	// Add back button
@@ -805,10 +990,17 @@ async function init() {
 	const finishButton = document.getElementById('finish-button')!;
 	finishButton.addEventListener('click', handleFinishPrediction);
 
+	// Setup claim button
+	const claimButton = document.getElementById('claim-button')!;
+	claimButton.addEventListener('click', handleClaimPayout);
+
 	// Poll for updates every 5 seconds
 	setInterval(() => {
 		loadMarketDetails();
 		loadChart();
+		if (userAddress) {
+			checkClaimStatus();
+		}
 	}, 5000);
 }
 

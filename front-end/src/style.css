@@ -728,18 +728,65 @@ box-shadow: var(--glow);
 }
 
 .btn-success {
-background: rgba(0, 255, 100, 0.2);
-color: #00ff64;
-border: 1px solid #00ff64;
-padding: 8px 20px;
-border-radius: var(--border-radius);
-font-family: 'Courier New', monospace;
-font-size: 0.9rem;
-cursor: pointer;
-transition: all 0.3s ease;
+	width: 100%;
+	padding: 15px;
+	background: linear-gradient(135deg, #00ff64 0%, #00cc50 100%);
+	color: #000;
+	border: none;
+	border-radius: var(--border-radius);
+	font-size: 1.1rem;
+	font-weight: bold;
+	font-family: 'Courier New', monospace;
+	cursor: pointer;
+	transition: all 0.3s ease;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+	box-shadow: 0 4px 15px rgba(0, 255, 100, 0.3);
+	margin-top: 15px;
 }
 
-.btn-success:hover {
-background: rgba(0, 255, 100, 0.3);
-box-shadow: 0 0 10px rgba(0, 255, 100, 0.5);
+.btn-success:hover:not(:disabled) {
+	transform: translateY(-2px);
+	box-shadow: 0 6px 25px rgba(0, 255, 100, 0.5);
+}
+
+.btn-success:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* Claim Section */
+.claim-section {
+	margin-top: 30px;
+	padding-top: 20px;
+	border-top: 1px solid var(--border-color);
+}
+
+.claim-section h3 {
+	color: var(--color-accent);
+	margin-bottom: 15px;
+	font-size: 1.2rem;
+}
+
+.claim-info {
+	margin-bottom: 15px;
+	padding: 15px;
+	border-radius: var(--border-radius);
+}
+
+.claim-info p {
+	margin: 0;
+	font-size: 1rem;
+}
+
+.claim-available {
+	background-color: rgba(0, 255, 100, 0.1);
+	border: 1px solid #00ff64;
+	color: #00ff64;
+}
+
+.claim-claimed {
+	background-color: rgba(0, 168, 255, 0.1);
+	border: 1px solid var(--color-secondary);
+	color: var(--color-secondary);
 }
