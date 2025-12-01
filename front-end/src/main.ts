@@ -290,9 +290,11 @@ async function checkAdminStatus() {
 
 // Update finish button visibility based on admin status
 function updateFinishButtonVisibility() {
-	const finishButton = document.getElementById('finish-button');
-	if (finishButton) {
-		finishButton.style.display = isAdmin ? 'inline-block' : 'none';
+	const finishSection = document.querySelector('.finish-section') as HTMLElement;
+	if (finishSection) {
+		// Hide if not admin OR if market is already finished
+		const shouldShow = isAdmin && currentMarket && !currentMarket.bettingFinished;
+		finishSection.style.display = shouldShow ? 'block' : 'none';
 	}
 }
 
