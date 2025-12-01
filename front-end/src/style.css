@@ -643,6 +643,61 @@ border-radius: var(--border-radius);
 border: 1px dashed var(--border-color);
 }
 
+/* Skeleton Loading */
+.market-card.skeleton {
+pointer-events: none;
+background: var(--bg-card);
+border: 1px solid var(--border-color);
+}
+
+.skeleton-title,
+.skeleton-text,
+.skeleton-status,
+.skeleton-button {
+background: linear-gradient(90deg, rgba(255, 255, 255, 0.05) 25%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0.05) 75%);
+background-size: 200% 100%;
+animation: skeleton-loading 1.5s infinite;
+border-radius: 4px;
+}
+
+@keyframes skeleton-loading {
+0% {
+	background-position: 200% 0;
+}
+100% {
+	background-position: -200% 0;
+}
+}
+
+.skeleton-title {
+height: 24px;
+width: 80%;
+margin-bottom: 12px;
+}
+
+.skeleton-text {
+height: 16px;
+width: 100%;
+margin-bottom: 8px;
+}
+
+.skeleton-text.short {
+width: 60%;
+}
+
+.skeleton-status {
+height: 20px;
+width: 40%;
+margin: 15px 0;
+}
+
+.skeleton-button {
+height: 40px;
+width: 100%;
+margin-top: 15px;
+border-radius: var(--border-radius);
+}
+
 /* Admin Section */
 .admin-section {
 margin-top: 15px;
