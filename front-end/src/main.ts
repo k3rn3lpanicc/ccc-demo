@@ -26,6 +26,7 @@ interface Market {
 	marketId: number;
 	title: string;
 	description: string;
+	tokenAddress: string;
 	status: number;
 	bettingFinished: boolean;
 	createdAt: number;
@@ -47,7 +48,13 @@ async function loadMarketDetails() {
 			
 			// Update page with market info
 			document.getElementById('contract-address')!.textContent = `Market #${MARKET_ID}`;
-			document.getElementById('contract-balance')!.textContent = `${data.market.totalVolume.toFixed(2)} USDC`;
+			document.getElementById('contract-balance')!.textContent = `${data.market.totalVolume.toFixed(2)} tokens`;
+			
+			// Show token address
+			const tokenInfo = document.getElementById('token-info');
+			if (tokenInfo) {
+				tokenInfo.textContent = `Token: ${data.market.tokenAddress.slice(0, 10)}...${data.market.tokenAddress.slice(-8)}`;
+			}
 			
 			const statusText = data.market.bettingFinished ? '🔴 Finished' : '🟢 Active';
 			document.getElementById('betting-status')!.textContent = statusText;
@@ -72,7 +79,7 @@ async function loadMarketDetails() {
 // Load accounts
 async function loadAccounts() {
 	try {
-		const response = await fetch(`${API_BASE}/accounts`);
+		const response = await fetch(`${API_BASE}/accounts/${MARKET_ID}`);
 		const data = await response.json();
 
 		if (data.success) {
@@ -85,7 +92,7 @@ async function loadAccounts() {
 				option.textContent = `#${account.index} ${account.address.slice(
 					0,
 					20
-				)}...${account.address.slice(-20)} (${account.balance.toFixed(2)} USDC)`;
+				)}...${account.address.slice(-20)} (${account.balance.toFixed(2)} tokens)`;
 				select.appendChild(option);
 			});
 		}

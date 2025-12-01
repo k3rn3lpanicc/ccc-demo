@@ -11,7 +11,6 @@ contract PrivateBetting {
 
     address public admin;
     address public teeAddress;
-    IERC20 public token;
     uint256 public marketCount;
 
     enum BettingStatus {
@@ -24,6 +23,7 @@ contract PrivateBetting {
         uint256 marketId;
         string title;
         string description;
+        address tokenAddress;
         string encryptedState;
         BettingStatus status;
         bool bettingFinished;
@@ -45,6 +45,7 @@ contract PrivateBetting {
         uint256 indexed marketId,
         string title,
         string description,
+        address tokenAddress,
         uint256 createdAt
     );
 
@@ -108,9 +109,8 @@ contract PrivateBetting {
         _;
     }
 
-    constructor(address _tokenAddress, address _teeAddress) {
+    constructor(address _teeAddress) {
         admin = msg.sender;
-        token = IERC20(_tokenAddress);
         teeAddress = _teeAddress;
         marketCount = 0;
     }
@@ -126,15 +126,19 @@ contract PrivateBetting {
      * @dev Admin creates a new market
      * @param title Market title
      * @param description Market description
+     * @param tokenAddress ERC20 token address for this market
      * @param initialEncryptedState Initial encrypted state from TEE
      * @param signature TEE signature on ("", initialEncryptedState)
      */
     function createMarket(
         string memory title,
         string memory description,
+        address tokenAddress,
         string memory initialEncryptedState,
         bytes memory signature
     ) external onlyAdmin returns (uint256) {
+        require(tokenAddress != address(0), "Invalid token address");
+        
         // Verify the TEE signature on (empty -> initialState)
         require(
             verifyTEESignature("", initialEncryptedState, signature),
@@ -147,6 +151,7 @@ contract PrivateBetting {
             marketId: marketId,
             title: title,
             description: description,
+            tokenAddress: tokenAddress,
             encryptedState: initialEncryptedState,
             status: BettingStatus.Active,
             bettingFinished: false,
@@ -156,7 +161,7 @@ contract PrivateBetting {
 
         marketCount++;
 
-        emit MarketCreated(marketId, title, description, block.timestamp);
+        emit MarketCreated(marketId, title, description, tokenAddress, block.timestamp);
 
         return marketId;
     }
@@ -178,9 +183,12 @@ contract PrivateBetting {
     ) external marketExists(marketId) bettingActive(marketId) {
         require(amount > 0, "Must bet a positive amount");
 
+        // Get the token for this market
+        IERC20 marketToken = IERC20(markets[marketId].tokenAddress);
+
         // Transfer tokens from user to contract
         require(
-            token.transferFrom(msg.sender, address(this), amount),
+            marketToken.transferFrom(msg.sender, address(this), amount),
             "Token transfer failed"
         );
 
@@ -306,7 +314,10 @@ contract PrivateBetting {
         uint256 amount = payouts[marketId][msg.sender];
         hasClaimed[marketId][msg.sender] = true;
 
-        require(token.transfer(msg.sender, amount), "Token transfer failed");
+        // Get the token for this market
+        IERC20 marketToken = IERC20(markets[marketId].tokenAddress);
+
+        require(marketToken.transfer(msg.sender, amount), "Token transfer failed");
 
         emit PayoutClaimed(marketId, msg.sender, amount);
     }
@@ -367,16 +378,19 @@ contract PrivateBetting {
     }
 
     /**
-     * @dev Get contract token balance
+     * @dev Get contract token balance for a specific market
+     * @param marketId Market ID
      */
-    function getContractBalance() external view returns (uint256) {
-        return token.balanceOf(address(this));
+    function getContractBalance(uint256 marketId) external view marketExists(marketId) returns (uint256) {
+        IERC20 marketToken = IERC20(markets[marketId].tokenAddress);
+        return marketToken.balanceOf(address(this));
     }
 
     /**
-     * @dev Get token address
+     * @dev Get token address for a specific market
+     * @param marketId Market ID
      */
-    function getTokenAddress() external view returns (address) {
-        return address(token);
+    function getTokenAddress(uint256 marketId) external view marketExists(marketId) returns (address) {
+        return markets[marketId].tokenAddress;
     }
 }

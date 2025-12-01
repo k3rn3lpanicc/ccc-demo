@@ -28,7 +28,6 @@ def main():
     with open(CONTRACT_ADDRESS_FILE, 'r') as f:
         contract_info = json.load(f)
         contract_address = contract_info['address']
-        token_address = contract_info['tokenAddress']
 
     with open(CONTRACT_ABI_FILE, 'r') as f:
         contract_abi = json.load(f)
@@ -41,13 +40,7 @@ def main():
         abi=contract_abi
     )
 
-    token = w3.eth.contract(
-        address=Web3.to_checksum_address(token_address),
-        abi=token_abi
-    )
-
     print(f"✓ Contract loaded: {contract_address}")
-    print(f"✓ Token loaded: {token_address}")
 
     # List markets
     market_count = contract.functions.marketCount().call()
@@ -56,7 +49,7 @@ def main():
     for i in range(market_count):
         market = contract.functions.getMarket(i).call()
         title = market[1]
-        status = market[4]
+        status = market[5]
         status_text = ["Active", "Finished", "Payouts Set"][status]
         print(f"  {i}. {title} - {status_text}")
     
@@ -68,6 +61,14 @@ def main():
     except:
         print("Invalid market, using market 0")
         market_id = 0
+
+    # Get the token for this market
+    token_address = contract.functions.getTokenAddress(market_id).call()
+    token = w3.eth.contract(
+        address=Web3.to_checksum_address(token_address),
+        abi=token_abi
+    )
+    print(f"✓ Market token loaded: {token_address}")
 
     # Get accounts
     accounts = w3.eth.accounts
@@ -87,9 +88,9 @@ def main():
 
             if payout > 0:
                 status = "✓ Claimed" if has_claimed else "💰 Available"
-                payout_usdc = w3.from_wei(payout, 'ether')
+                payout_tokens = w3.from_wei(payout, 'ether')
                 print(f"  {i}. {acc[:10]}...{acc[-6:]}")
-                print(f"      Payout: {payout_usdc} USDC - {status}")
+                print(f"      Payout: {payout_tokens} tokens - {status}")
 
                 if not has_claimed:
                     claimable_accounts.append((i, acc, payout))
@@ -127,8 +128,8 @@ def main():
     # Show balance before
     balance_before = token.functions.balanceOf(claimer).call()
     print(
-        f"\n> Account balance before: {w3.from_wei(balance_before, 'ether')} USDC")
-    print(f"   Payout amount: {w3.from_wei(payout_amount, 'ether')} USDC")
+        f"\n> Account balance before: {w3.from_wei(balance_before, 'ether')} tokens")
+    print(f"   Payout amount: {w3.from_wei(payout_amount, 'ether')} tokens")
 
     # Confirm
     confirm = input("\nClaim payout? (y/n): ")
@@ -158,9 +159,9 @@ def main():
             balance_change = balance_after - balance_before
 
             print(
-                f"\n> Account balance after: {w3.from_wei(balance_after, 'ether')} USDC")
+                f"\n> Account balance after: {w3.from_wei(balance_after, 'ether')} tokens")
             print(
-                f"   Net change: +{w3.from_wei(balance_change, 'ether')} USDC")
+                f"   Net change: +{w3.from_wei(balance_change, 'ether')} tokens")
         else:
             print(f"X Transaction failed")
 

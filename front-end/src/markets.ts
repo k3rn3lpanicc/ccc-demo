@@ -6,6 +6,7 @@ interface Market {
 	marketId: number;
 	title: string;
 	description: string;
+	tokenAddress: string;
 	status: number;
 	bettingFinished: boolean;
 	createdAt: number;
@@ -60,7 +61,11 @@ function displayMarkets(markets: Market[]) {
 			<div class="market-stats">
 				<div class="stat">
 					<span class="stat-label">Total Volume:</span>
-					<span class="stat-value">${market.totalVolume.toFixed(2)} USDC</span>
+					<span class="stat-value">${market.totalVolume.toFixed(2)} tokens</span>
+				</div>
+				<div class="stat">
+					<span class="stat-label">Token:</span>
+					<span class="stat-value">${market.tokenAddress.slice(0, 6)}...${market.tokenAddress.slice(-4)}</span>
 				</div>
 				<div class="stat">
 					<span class="stat-label">Created:</span>
@@ -90,6 +95,7 @@ document.getElementById('create-market-form')!.addEventListener('submit', async 
 
 	const title = (document.getElementById('market-title') as HTMLInputElement).value;
 	const description = (document.getElementById('market-description') as HTMLTextAreaElement).value;
+	const tokenAddress = (document.getElementById('market-token') as HTMLInputElement).value;
 	const resultDiv = document.getElementById('create-result')!;
 	const button = document.getElementById('create-market-button') as HTMLButtonElement;
 
@@ -112,6 +118,7 @@ document.getElementById('create-market-form')!.addEventListener('submit', async 
 			body: JSON.stringify({ 
 				title, 
 				description,
+				tokenAddress,
 				adminAddress 
 			}),
 		});
@@ -125,6 +132,7 @@ document.getElementById('create-market-form')!.addEventListener('submit', async 
 			// Clear form
 			(document.getElementById('market-title') as HTMLInputElement).value = '';
 			(document.getElementById('market-description') as HTMLTextAreaElement).value = '';
+			(document.getElementById('market-token') as HTMLInputElement).value = '';
 
 			// Reload markets
 			setTimeout(() => {

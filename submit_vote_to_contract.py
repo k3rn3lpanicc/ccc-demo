@@ -49,7 +49,6 @@ def main():
     with open(CONTRACT_ADDRESS_FILE, 'r') as f:
         contract_info = json.load(f)
         contract_address = contract_info['address']
-        token_address = contract_info['tokenAddress']
 
     with open(CONTRACT_ABI_FILE, 'r') as f:
         contract_abi = json.load(f)
@@ -62,13 +61,7 @@ def main():
         abi=contract_abi
     )
 
-    token = w3.eth.contract(
-        address=Web3.to_checksum_address(token_address),
-        abi=token_abi
-    )
-
     print(f"✓ Contract loaded: {contract_address}")
-    print(f"✓ Token loaded: {token_address}")
 
     # List available markets
     market_count = contract.functions.marketCount().call()
@@ -77,9 +70,10 @@ def main():
     for i in range(market_count):
         market = contract.functions.getMarket(i).call()
         title = market[1]
-        status = market[4]
+        market_token = market[3]
+        status = market[5]
         status_text = ["Active", "Finished", "Payouts Set"][status]
-        print(f"  {i}. {title} - {status_text}")
+        print(f"  {i}. {title} - {status_text} (Token: {market_token[:10]}...)")
     
     market_choice = input(f"\nSelect market (0-{market_count-1}): ")
     try:
@@ -90,6 +84,14 @@ def main():
         print("Invalid market, using market 0")
         market_id = 0
 
+    # Get the token for the selected market
+    token_address = contract.functions.getTokenAddress(market_id).call()
+    token = w3.eth.contract(
+        address=Web3.to_checksum_address(token_address),
+        abi=token_abi
+    )
+    print(f"✓ Market token loaded: {token_address}")
+
     accounts = w3.eth.accounts
     if len(accounts) < 2:
         print("X Not enough accounts")
@@ -98,7 +100,7 @@ def main():
     print("\nAvailable accounts:")
     for i, acc in enumerate(accounts[1:9], 1):
         token_balance = token.functions.balanceOf(acc).call()
-        print(f"  {i}. {acc} ({w3.from_wei(token_balance, 'ether')} USDC)")
+        print(f"  {i}. {acc} ({w3.from_wei(token_balance, 'ether')} tokens)")
 
     choice = input("\nSelect account (1-8): ")
     try:
@@ -110,13 +112,13 @@ def main():
 
     print(f"\n   Selected voter: {voter}")
     token_balance = token.functions.balanceOf(voter).call()
-    print(f"   Balance: {w3.from_wei(token_balance, 'ether')} USDC")
+    print(f"   Balance: {w3.from_wei(token_balance, 'ether')} tokens")
     wallet_address = voter
-    bet_usdc = input("\nBet amount in USDC (e.g., 100): ")
+    bet_input = input("\nBet amount (e.g., 100): ")
     try:
-        bet_amount = w3.to_wei(float(bet_usdc), 'ether')
+        bet_amount = w3.to_wei(float(bet_input), 'ether')
     except:
-        print("Invalid amount, using 100 USDC")
+        print("Invalid amount, using 100 tokens")
         bet_amount = w3.to_wei(100, 'ether')
 
     bet_on = input("Bet on (A/B): ").upper()
@@ -133,7 +135,7 @@ def main():
     }
 
     print(
-        f"\n> Creating vote for Market #{market_id}: {w3.from_wei(bet_amount, 'ether')} USDC on {bet_on}")
+        f"\n> Creating vote for Market #{market_id}: {w3.from_wei(bet_amount, 'ether')} tokens on {bet_on}")
     master_public_key = load_master_key()
     plaintext = json.dumps(vote_data).encode("utf-8")
     sym_key = os.urandom(32)
@@ -153,7 +155,7 @@ def main():
     print("✓ Token approved")
 
     print(
-        f"\n> Submitting to contract with {w3.from_wei(bet_amount, 'ether')} USDC...")
+        f"\n> Submitting to contract with {w3.from_wei(bet_amount, 'ether')} tokens...")
 
     try:
         tx_hash = contract.functions.vote(

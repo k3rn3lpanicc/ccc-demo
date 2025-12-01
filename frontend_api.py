@@ -60,8 +60,8 @@ def get_history(marketId: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/accounts")
-def get_accounts():
+@app.get("/api/accounts/{marketId}")
+def get_accounts(marketId: int):
     try:
         w3 = Web3(Web3.HTTPProvider(RPC_URL))
         if not w3.is_connected():
@@ -69,10 +69,21 @@ def get_accounts():
                 status_code=500, detail="Cannot connect to Ethereum node")
 
         with open(CONTRACT_ADDRESS_FILE, 'r') as f:
-            token_address = json.load(f)['tokenAddress']
+            contract_address = json.load(f)['address']
+
+        with open(CONTRACT_ABI_FILE, 'r') as f:
+            contract_abi = json.load(f)
 
         with open(TOKEN_ABI_FILE, 'r') as f:
             token_abi = json.load(f)
+
+        contract = w3.eth.contract(
+            address=Web3.to_checksum_address(contract_address),
+            abi=contract_abi
+        )
+
+        # Get the token address for this specific market
+        token_address = contract.functions.getTokenAddress(marketId).call()
 
         token = w3.eth.contract(
             address=Web3.to_checksum_address(token_address),
@@ -90,7 +101,7 @@ def get_accounts():
                 "balance": float(w3.from_wei(balance, 'ether'))
             })
 
-        return {"success": True, "accounts": account_list}
+        return {"success": True, "accounts": account_list, "tokenAddress": token_address}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -123,11 +134,12 @@ def get_markets():
                 "marketId": market[0],
                 "title": market[1],
                 "description": market[2],
-                "encryptedState": market[3],
-                "status": market[4],
-                "bettingFinished": market[5],
-                "createdAt": market[6],
-                "totalVolume": float(w3.from_wei(market[7], 'ether'))
+                "tokenAddress": market[3],
+                "encryptedState": market[4],
+                "status": market[5],
+                "bettingFinished": market[6],
+                "createdAt": market[7],
+                "totalVolume": float(w3.from_wei(market[8], 'ether'))
             })
 
         return {"success": True, "markets": markets}
@@ -162,11 +174,12 @@ def get_market(marketId: int):
                 "marketId": market[0],
                 "title": market[1],
                 "description": market[2],
-                "encryptedState": market[3],
-                "status": market[4],
-                "bettingFinished": market[5],
-                "createdAt": market[6],
-                "totalVolume": float(w3.from_wei(market[7], 'ether'))
+                "tokenAddress": market[3],
+                "encryptedState": market[4],
+                "status": market[5],
+                "bettingFinished": market[6],
+                "createdAt": market[7],
+                "totalVolume": float(w3.from_wei(market[8], 'ether'))
             }
         }
     except Exception as e:
@@ -176,6 +189,7 @@ def get_market(marketId: int):
 class CreateMarketRequest(BaseModel):
     title: str
     description: str
+    tokenAddress: str
     adminAddress: str
 
 
@@ -218,10 +232,14 @@ def create_market(req: CreateMarketRequest):
         initial_state = result["encrypted_state"]
         initial_signature = result["signature"]
 
+        # Validate token address
+        token_address = Web3.to_checksum_address(req.tokenAddress)
+
         # Create market (use the verified admin address)
         tx_hash = contract.functions.createMarket(
             req.title,
             req.description,
+            token_address,
             initial_state,
             bytes.fromhex(initial_signature[2:])  # Remove '0x' prefix
         ).transact({
@@ -348,7 +366,6 @@ def submit_vote(vote: VoteRequest):
         with open(CONTRACT_ADDRESS_FILE, 'r') as f:
             contract_info = json.load(f)
             contract_address = contract_info['address']
-            token_address = contract_info['tokenAddress']
 
         with open(CONTRACT_ABI_FILE, 'r') as f:
             contract_abi = json.load(f)
@@ -361,8 +378,11 @@ def submit_vote(vote: VoteRequest):
             abi=contract_abi
         )
 
+        # Get the token address for this specific market
+        market_token_address = contract.functions.getTokenAddress(vote.marketId).call()
+        
         token = w3.eth.contract(
-            address=Web3.to_checksum_address(token_address),
+            address=Web3.to_checksum_address(market_token_address),
             abi=token_abi
         )
 
@@ -384,7 +404,7 @@ def submit_vote(vote: VoteRequest):
         encrypted_sym_key_b64 = b64e(encrypted_sym_key)
         capsule_b64 = b64e(bytes(capsule))
 
-        # Approve token transfer
+        # Approve token transfer to contract
         approve_tx = token.functions.approve(contract_address, bet_amount).transact({
             'from': voter,
             'gas': 100000
