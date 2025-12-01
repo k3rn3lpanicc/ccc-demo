@@ -1,8 +1,13 @@
 import json
 import requests
+import os
 from web3 import Web3
+from dotenv import load_dotenv
 
-RPC_URL = "http://127.0.0.1:8545"
+# Load environment variables
+load_dotenv()
+
+RPC_URL = os.getenv('RPC_URL', 'https://data-seed-prebsc-1-s1.binance.org:8545')
 CONTRACT_ADDRESS_FILE = "contract-address.json"
 CONTRACT_ABI_FILE = "contract-abi.json"
 TEE_FINISH_URL = "http://127.0.0.1:8000/finish"
@@ -10,12 +15,40 @@ TEE_FINISH_URL = "http://127.0.0.1:8000/finish"
 
 def main():
     print("\n" + "="*60)
-    print("FINISH BETTING AND DISTRIBUTE FUNDS")
+    print("FINISH BETTING AND DISTRIBUTE FUNDS (BSC TESTNET)")
     print("="*60)
+
+    # Get private key
+    private_key = os.getenv('PRIVATE_KEY')
+    if not private_key:
+        print("\n⚠️  No private key found in .env file")
+        print("Please either:")
+        print("  1. Create a .env file with PRIVATE_KEY=your_key")
+        print("  2. Or enter your private key now (admin only!)")
+        private_key = input("\nEnter your private key (without 0x): ").strip()
+        if not private_key:
+            print("✗ No private key provided. Exiting.")
+            return
+
+    # Add 0x prefix if not present
+    if not private_key.startswith('0x'):
+        private_key = '0x' + private_key
 
     w3 = Web3(Web3.HTTPProvider(RPC_URL))
     if not w3.is_connected():
-        print("X Cannot connect to Ethereum node")
+        print(f"X Cannot connect to network: {RPC_URL}")
+        return
+
+    print(f"✓ Connected to network")
+    print(f"   Chain ID: {w3.eth.chain_id}")
+
+    # Get account from private key
+    try:
+        account = w3.eth.account.from_key(private_key)
+        admin = account.address
+        print(f"✓ Admin account: {admin}")
+    except Exception as e:
+        print(f"✗ Invalid private key: {e}")
         return
 
     with open(CONTRACT_ADDRESS_FILE, 'r') as f:
@@ -30,6 +63,15 @@ def main():
     )
 
     print(f"✓ Contract loaded: {contract_address}")
+    
+    # Verify admin
+    contract_admin = contract.functions.admin().call()
+    if admin.lower() != contract_admin.lower():
+        print(f"✗ You are not the admin!")
+        print(f"   Your address: {admin}")
+        print(f"   Admin address: {contract_admin}")
+        return
+    print(f"✓ Admin verified")
 
     # List markets
     market_count = contract.functions.marketCount().call()
@@ -50,10 +92,6 @@ def main():
     except:
         print("Invalid market, using market 0")
         market_id = 0
-
-    accounts = w3.eth.accounts
-    admin = accounts[0]
-    print(f"   Admin: {admin}")
 
     market = contract.functions.getMarket(market_id).call()
     status = market[5]
@@ -80,22 +118,32 @@ def main():
 
         print(f"\n> Calling contract.finishBetting({market_id})...")
         try:
-            tx_hash = contract.functions.finishBetting(market_id).transact({
+            nonce = w3.eth.get_transaction_count(admin)
+            finish_tx = contract.functions.finishBetting(market_id).build_transaction({
                 'from': admin,
-                'gas': 1000000
+                'gas': 1000000,
+                'gasPrice': w3.eth.gas_price,
+                'nonce': nonce,
             })
 
+            signed_tx = w3.eth.account.sign_transaction(finish_tx, private_key)
+            tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+
             print(f"   Transaction sent: {tx_hash.hex()}")
+            print("   Waiting for confirmation...")
             receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 
             if receipt['status'] == 1:
                 print(f"✓ Betting finished!")
                 print(f"   Block: {receipt['blockNumber']}")
+                print(f"   Gas used: {receipt['gasUsed']}")
             else:
                 print(f"X Transaction failed")
                 return
         except Exception as e:
             print(f"X Error finishing betting: {e}")
+            import traceback
+            traceback.print_exc()
             return
 
     print("\n" + "="*60)
@@ -184,17 +232,24 @@ def main():
             print(
                 f"\n   Batch {batch_num}/{total_batches}: Setting {len(batch_addresses)} payouts...")
 
-            tx_hash = contract.functions.setPayouts(
+            nonce = w3.eth.get_transaction_count(admin)
+            payout_tx = contract.functions.setPayouts(
                 market_id,
                 batch_addresses,
                 batch_amounts,
                 is_last_batch
-            ).transact({
+            ).build_transaction({
                 'from': admin,
-                'gas': 10000000
+                'gas': 10000000,
+                'gasPrice': w3.eth.gas_price,
+                'nonce': nonce,
             })
 
+            signed_tx = w3.eth.account.sign_transaction(payout_tx, private_key)
+            tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+
             print(f"   Transaction sent: {tx_hash.hex()}")
+            print(f"   Waiting for confirmation...")
             receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 
             if receipt['status'] == 1:
@@ -215,13 +270,16 @@ def main():
     print("\n" + "="*60)
     print("✓ PROCESS COMPLETE!")
     print("="*60)
-    print("\nWinners can now claim their payouts by calling:")
-    print("  contract.claimPayout()")
-    print("\nOr use the claim script:")
-    print("  python claim_payout.py")
-
-    balance = w3.eth.get_balance(contract.address)
-    print(f"\nContract balance: {w3.from_wei(balance, 'ether')} ETH")
+    print("\nWinners can now claim their payouts!")
+    print("  - Through the frontend")
+    print("  - Or use: python claim_payout.py")
+    
+    # Get token balance instead of ETH
+    try:
+        token_address = contract.functions.getTokenAddress(market_id).call()
+        print(f"\nMarket token: {token_address}")
+    except:
+        pass
 
 
 if __name__ == "__main__":

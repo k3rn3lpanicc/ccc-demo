@@ -24,16 +24,15 @@
         <div class="modal">
           <h2>🔐 Admin Login</h2>
           <div class="modal-content">
-            <div class="form-group">
-              <label for="admin-address">Admin Address:</label>
-              <input type="text" id="admin-address" placeholder="0x..." required />
-            </div>
-            <div id="login-result" class="vote-result"></div>
+            <p style="color: #8ab4f8; text-align: center; margin-bottom: 20px;">
+              Connect your wallet to verify admin access
+            </p>
+            <button id="metamask-login" class="btn-primary" style="width: 100%;">
+              🦊 Connect with MetaMask
+            </button>
+            <div id="login-result" class="vote-result" style="margin-top: 15px;"></div>
           </div>
           <div class="modal-buttons">
-            <button id="confirm-login" class="btn-primary">
-              Login
-            </button>
             <button id="cancel-login" class="btn-danger">
               Cancel
             </button>

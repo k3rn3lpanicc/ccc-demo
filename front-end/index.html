@@ -44,14 +44,14 @@
         <!-- Voting Form -->
         <div class="card vote-card">
           <h2>Cast Your Vote</h2>
-          <form id="vote-form">
-            <div class="form-group">
-              <label for="account-select">Select Account:</label>
-              <select id="account-select" required>
-                <option value="">Loading accounts...</option>
-              </select>
-            </div>
+          
+          <!-- Wallet Connection -->
+          <div class="wallet-section">
+            <button type="button" id="connect-wallet-btn" class="btn-primary">Connect Wallet</button>
+            <div id="wallet-info"></div>
+          </div>
 
+          <form id="vote-form" style="display: none;">
             <div class="form-group">
               <label for="bet-amount">Bet Amount:</label>
               <input type="number" id="bet-amount" step="1" min="1" value="100" required />

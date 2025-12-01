@@ -1,5 +1,6 @@
 import './style.css';
 import { Chart, registerables } from 'chart.js';
+import { ethers } from 'ethers';
 
 Chart.register(...registerables);
 
@@ -16,12 +17,6 @@ interface HistoryEntry {
 	total_votes: number;
 }
 
-interface Account {
-	index: number;
-	address: string;
-	balance: number;
-}
-
 interface Market {
 	marketId: number;
 	title: string;
@@ -33,9 +28,21 @@ interface Market {
 	totalVolume: number;
 }
 
+// Ethereum types
+declare global {
+	interface Window {
+		ethereum?: any;
+	}
+}
+
 let chart: Chart | null = null;
 let lastHistoryLength = 0;
 let currentMarket: Market | null = null;
+let provider: ethers.BrowserProvider | null = null;
+let signer: ethers.Signer | null = null;
+let userAddress: string | null = null;
+let userBalance: string = '0';
+let isAdmin: boolean = false;
 
 // Load market details
 async function loadMarketDetails() {
@@ -76,30 +83,175 @@ async function loadMarketDetails() {
 	}
 }
 
-// Load accounts
-async function loadAccounts() {
+// Connect to MetaMask
+async function connectWallet() {
+	const connectBtn = document.getElementById('connect-wallet-btn') as HTMLButtonElement;
+	const walletInfo = document.getElementById('wallet-info')!;
+	const voteForm = document.getElementById('vote-form') as HTMLFormElement;
+
 	try {
-		const response = await fetch(`${API_BASE}/accounts/${MARKET_ID}`);
-		const data = await response.json();
-
-		if (data.success) {
-			const select = document.getElementById('account-select') as HTMLSelectElement;
-			select.innerHTML = '';
-
-			data.accounts.forEach((account: Account) => {
-				const option = document.createElement('option');
-				option.value = account.index.toString();
-				option.textContent = `#${account.index} ${account.address.slice(
-					0,
-					20
-				)}...${account.address.slice(-20)} (${account.balance.toFixed(2)} tokens)`;
-				select.appendChild(option);
-			});
+		if (!window.ethereum) {
+			alert('Please install MetaMask to use this app!');
+			return;
 		}
+
+		// Request account access
+		provider = new ethers.BrowserProvider(window.ethereum);
+		
+		// Check network first
+		const network = await provider.getNetwork();
+		const chainId = Number(network.chainId);
+		
+		if (chainId !== 97) {
+			alert(`Wrong network! Please switch MetaMask to BSC Testnet (Chain ID: 97).\n\nCurrent network: ${chainId}`);
+			return;
+		}
+
+		const accounts = await provider.send('eth_requestAccounts', []);
+		userAddress = accounts[0];
+		signer = await provider.getSigner();
+
+		// Check if we have a market and token address
+		if (!currentMarket || !currentMarket.tokenAddress || currentMarket.tokenAddress === '0x0000000000000000000000000000000000000000') {
+			// No token yet, just show connected
+			walletInfo.innerHTML = `
+				<div class="wallet-connected">
+					<div class="wallet-address">
+						<strong>Connected:</strong> ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}
+					</div>
+				</div>
+			`;
+			connectBtn.textContent = 'Disconnect';
+			connectBtn.classList.add('connected');
+			voteForm.style.display = 'block';
+			
+			// Check if user is admin
+			await checkAdminStatus();
+			return;
+		}
+
+		// Get token balance
+		try {
+			const tokenAbiResponse = await fetch('/token-abi.json');
+			const tokenAbi = await tokenAbiResponse.json();
+			
+			const tokenContract = new ethers.Contract(
+				currentMarket.tokenAddress,
+				tokenAbi,
+				provider
+			);
+
+			const balance = await tokenContract.balanceOf(userAddress);
+			const symbol = await tokenContract.symbol();
+			userBalance = ethers.formatEther(balance);
+
+			// Update UI
+			walletInfo.innerHTML = `
+				<div class="wallet-connected">
+					<div class="wallet-address">
+						<strong>Connected:</strong> ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}
+					</div>
+					<div class="wallet-balance">
+						<strong>Balance:</strong> ${parseFloat(userBalance).toFixed(2)} ${symbol}
+					</div>
+				</div>
+			`;
+			connectBtn.textContent = 'Disconnect';
+			connectBtn.classList.add('connected');
+			voteForm.style.display = 'block';
+			
+			// Check if user is admin
+			await checkAdminStatus();
+		} catch (tokenError) {
+			console.error('Token error:', tokenError);
+			// Still show connected even if token check fails
+			walletInfo.innerHTML = `
+				<div class="wallet-connected">
+					<div class="wallet-address">
+						<strong>Connected:</strong> ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}
+					</div>
+					<div class="wallet-balance">
+						<strong>Balance:</strong> Unable to load
+					</div>
+				</div>
+			`;
+			connectBtn.textContent = 'Disconnect';
+			connectBtn.classList.add('connected');
+			voteForm.style.display = 'block';
+			
+			// Check if user is admin
+			await checkAdminStatus();
+		}
+	} catch (error: any) {
+		console.error('Failed to connect wallet:', error);
+		
+		// Clean error message handling
+		let errorMessage = 'Failed to connect wallet';
+		
+		if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+			errorMessage = 'Connection cancelled by user';
+		} else if (error.message) {
+			if (error.message.includes('user rejected')) {
+				errorMessage = 'Connection cancelled by user';
+			} else if (error.message.includes('Wrong network')) {
+				// Don't show alert, already shown in function
+				return;
+			} else if (error.message.length < 80) {
+				errorMessage = error.message;
+			} else {
+				errorMessage = 'Connection failed. Please try again';
+			}
+		}
+		
+		alert(errorMessage);
+	}
+}
+
+// Disconnect wallet
+function disconnectWallet() {
+	userAddress = null;
+	signer = null;
+	provider = null;
+	userBalance = '0';
+
+	const connectBtn = document.getElementById('connect-wallet-btn') as HTMLButtonElement;
+	const walletInfo = document.getElementById('wallet-info')!;
+	const voteForm = document.getElementById('vote-form') as HTMLFormElement;
+
+	walletInfo.innerHTML = '';
+	connectBtn.textContent = 'Connect Wallet';
+	connectBtn.classList.remove('connected');
+	voteForm.style.display = 'none';
+	isAdmin = false;
+	updateFinishButtonVisibility();
+}
+
+// Check if connected user is admin
+async function checkAdminStatus() {
+	if (!userAddress) return;
+	
+	try {
+		const response = await fetch(`${API_BASE}/admin/verify`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ address: userAddress })
+		});
+		
+		const data = await response.json();
+		isAdmin = data.success && data.isAdmin;
+		updateFinishButtonVisibility();
 	} catch (error) {
-		console.error('Failed to load accounts:', error);
-		const select = document.getElementById('account-select') as HTMLSelectElement;
-		select.innerHTML = '<option>Error loading accounts</option>';
+		console.error('Failed to check admin status:', error);
+		isAdmin = false;
+		updateFinishButtonVisibility();
+	}
+}
+
+// Update finish button visibility based on admin status
+function updateFinishButtonVisibility() {
+	const finishButton = document.getElementById('finish-button');
+	if (finishButton) {
+		finishButton.style.display = isAdmin ? 'inline-block' : 'none';
 	}
 }
 
@@ -254,63 +406,136 @@ async function loadChart() {
 	}
 }
 
-// Handle vote submission
+// Handle vote submission with MetaMask
 async function handleVoteSubmit(event: Event) {
 	event.preventDefault();
 
-	const form = event.target as HTMLFormElement;
-	const accountIndex = parseInt(
-		(document.getElementById('account-select') as HTMLSelectElement).value
-	);
+	if (!signer || !userAddress || !currentMarket) {
+		alert('Please connect your wallet first!');
+		return;
+	}
+
 	const betAmount = parseFloat((document.getElementById('bet-amount') as HTMLInputElement).value);
-	const betOn = (document.querySelector('input[name="vote-option"]:checked') as HTMLInputElement)
-		.value;
+	const betOn = (document.querySelector('input[name="vote-option"]:checked') as HTMLInputElement).value;
 
 	const submitButton = document.getElementById('vote-button') as HTMLButtonElement;
 	const resultDiv = document.getElementById('vote-result')!;
 
 	// Show loading state
 	submitButton.disabled = true;
-	submitButton.textContent = 'Submitting...';
+	submitButton.textContent = 'Processing...';
 	resultDiv.className = 'vote-result loading show';
-	resultDiv.textContent = 'Encrypting and submitting your vote...';
+	resultDiv.textContent = 'Checking network...';
 
 	try {
-		const response = await fetch(`${API_BASE}/vote`, {
+		// Check if on BSC Testnet
+		const network = await provider!.getNetwork();
+		const chainId = Number(network.chainId);
+		
+		if (chainId !== 97) {
+			throw new Error(`Wrong network! Please switch MetaMask to BSC Testnet (Chain ID: 97).\n\nCurrent network: ${chainId}`);
+		}
+
+		resultDiv.textContent = 'Preparing transaction...';
+
+		// Load contract ABIs
+		const contractAbiResponse = await fetch('/contract-abi.json');
+		const contractAbi = await contractAbiResponse.json();
+		
+		const tokenAbiResponse = await fetch('/token-abi.json');
+		const tokenAbi = await tokenAbiResponse.json();
+
+		// Get contract address
+		const addressResponse = await fetch('/contract-address.json');
+		const addressData = await addressResponse.json();
+		const contractAddress = addressData.address;
+
+		// Create contract instances
+		const contract = new ethers.Contract(contractAddress, contractAbi, signer);
+		const token = new ethers.Contract(currentMarket.tokenAddress, tokenAbi, signer);
+
+		const betAmountWei = ethers.parseEther(betAmount.toString());
+
+		// Step 1: Get encrypted vote from backend
+		resultDiv.textContent = 'Encrypting vote...';
+		const encryptResponse = await fetch(`${API_BASE}/encrypt-vote`, {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
+			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				marketId: MARKET_ID,
-				accountIndex,
-				betAmount,
-				betOn,
-			}),
+				userAddress,
+				betAmount: betAmountWei.toString(),
+				betOn
+			})
 		});
 
-		const data = await response.json();
-
-		if (data.success) {
-			resultDiv.className = 'vote-result success show';
-			resultDiv.innerHTML = `
-        Vote submitted successfully!<br>
-        <small>Tx: ${data.txHash.slice(0, 20)}...</small><br>
-        <small>Block: ${data.blockNumber}</small><br>
-        <small>Waiting for listener to process...</small>
-      `;
-
-			// Reload data after a delay
-			setTimeout(() => {
-				loadMarketDetails();
-				loadChart();
-			}, 3000);
-		} else {
-			throw new Error(data.detail || 'Unknown error');
+		const encryptData = await encryptResponse.json();
+		if (!encryptData.success) {
+			throw new Error(encryptData.error || 'Failed to encrypt vote');
 		}
-	} catch (error) {
+
+		// Step 2: Approve token
+		resultDiv.textContent = 'Approving tokens...';
+		const approveTx = await token.approve(contractAddress, betAmountWei);
+		await approveTx.wait();
+
+		// Step 3: Submit vote to contract
+		resultDiv.textContent = 'Submitting vote to blockchain...';
+		const voteTx = await contract.vote(
+			MARKET_ID,
+			encryptData.encryptedVote,
+			encryptData.encryptedSymKey,
+			encryptData.capsule,
+			betAmountWei
+		);
+
+		const receipt = await voteTx.wait();
+
+		resultDiv.className = 'vote-result success show';
+		resultDiv.innerHTML = `
+			Vote submitted successfully!<br>
+			<small>Tx: ${receipt.hash.slice(0, 20)}...</small><br>
+			<small>Block: ${receipt.blockNumber}</small><br>
+			<small>Waiting for listener to process...</small>
+		`;
+
+		// Reload data after a delay
+		setTimeout(() => {
+			loadMarketDetails();
+			loadChart();
+			connectWallet(); // Refresh balance
+		}, 3000);
+
+	} catch (error: any) {
+		console.error('Vote submission error:', error);
 		resultDiv.className = 'vote-result error show';
-		resultDiv.textContent = `Error: ${(error as Error).message}`;
+		
+		// Clean error message handling
+		let errorMessage = 'Transaction failed';
+		
+		if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+			errorMessage = 'Transaction cancelled by user';
+		} else if (error.message) {
+			// Extract clean error message
+			if (error.message.includes('user rejected')) {
+				errorMessage = 'Transaction cancelled by user';
+			} else if (error.message.includes('insufficient funds')) {
+				errorMessage = 'Insufficient funds for gas';
+			} else if (error.message.includes('nonce')) {
+				errorMessage = 'Transaction nonce error. Please try again';
+			} else if (error.message.includes('gas required exceeds allowance')) {
+				errorMessage = 'Gas limit too low. Please increase gas limit';
+			} else if (error.reason) {
+				errorMessage = error.reason;
+			} else if (error.message.length < 100) {
+				errorMessage = error.message;
+			} else {
+				// Message too long, show generic error
+				errorMessage = 'Transaction failed. Check console for details';
+			}
+		}
+		
+		resultDiv.textContent = `✗ ${errorMessage}`;
 	} finally {
 		submitButton.disabled = false;
 		submitButton.textContent = 'Submit Vote';
@@ -405,9 +630,30 @@ async function handleFinishPrediction() {
 				finishButton.disabled = true;
 				finishButton.textContent = 'Prediction Finished';
 			}, 3000);
-		} catch (error) {
+		} catch (error: any) {
+			console.error('Finish prediction error:', error);
 			resultDiv.className = 'vote-result error show';
-			resultDiv.textContent = `Error: ${(error as Error).message}`;
+			
+			// Clean error message handling
+			let errorMessage = 'Failed to finish prediction';
+			
+			if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+				errorMessage = 'Transaction cancelled by user';
+			} else if (error.message) {
+				if (error.message.includes('user rejected')) {
+					errorMessage = 'Transaction cancelled by user';
+				} else if (error.message.includes('Not authorized')) {
+					errorMessage = 'Not authorized: Admin only';
+				} else if (error.message.includes('already finished')) {
+					errorMessage = 'Betting already finished';
+				} else if (error.message.length < 100) {
+					errorMessage = error.message;
+				} else {
+					errorMessage = 'Operation failed. Check console for details';
+				}
+			}
+			
+			resultDiv.textContent = `✗ ${errorMessage}`;
 			confirmButton.disabled = false;
 			cancelButton.disabled = false;
 		}
@@ -430,8 +676,36 @@ async function init() {
 	header.insertBefore(backButton, header.firstChild);
 
 	await loadMarketDetails();
-	await loadAccounts();
 	await loadChart();
+	
+	// Initially hide finish button (will show if admin)
+	updateFinishButtonVisibility();
+
+	// Setup wallet connection
+	const connectBtn = document.getElementById('connect-wallet-btn') as HTMLButtonElement;
+	connectBtn.addEventListener('click', () => {
+		if (userAddress) {
+			disconnectWallet();
+		} else {
+			connectWallet();
+		}
+	});
+
+	// Listen for account changes
+	if (window.ethereum) {
+		window.ethereum.on('accountsChanged', (accounts: string[]) => {
+			if (accounts.length === 0) {
+				disconnectWallet();
+			} else {
+				connectWallet();
+			}
+		});
+		
+		// Listen for network changes
+		window.ethereum.on('chainChanged', () => {
+			window.location.reload();
+		});
+	}
 
 	// Setup form handler
 	const form = document.getElementById('vote-form')!;
