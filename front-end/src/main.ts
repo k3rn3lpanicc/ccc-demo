@@ -702,6 +702,18 @@ async function init() {
 	// Initially hide finish button (will show if admin)
 	updateFinishButtonVisibility();
 
+	// Try to auto-reconnect if wallet was previously connected
+	if (window.ethereum) {
+		try {
+			const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+			if (accounts.length > 0) {
+				await connectWallet();
+			}
+		} catch (error) {
+			console.log('Auto-reconnect not available');
+		}
+	}
+
 	// Setup wallet connection
 	const connectBtn = document.getElementById('wallet-connect-btn') as HTMLButtonElement;
 	connectBtn.addEventListener('click', async () => {

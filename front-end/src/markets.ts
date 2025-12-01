@@ -331,6 +331,19 @@ async function checkAdminStatus() {
 	}
 }
 
+// Try to auto-reconnect if wallet was previously connected
+if (window.ethereum) {
+	window.ethereum.request({ method: 'eth_accounts' })
+		.then((accounts: string[]) => {
+			if (accounts.length > 0) {
+				connectWallet();
+			}
+		})
+		.catch((error: any) => {
+			console.log('Auto-reconnect not available');
+		});
+}
+
 // Setup wallet connection button
 const walletBtn = document.getElementById('wallet-connect-btn') as HTMLButtonElement;
 walletBtn.addEventListener('click', async () => {
