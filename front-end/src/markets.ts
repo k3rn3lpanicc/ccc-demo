@@ -26,6 +26,13 @@ let userAddress: string | null = null;
 let provider: ethers.BrowserProvider | null = null;
 let signer: ethers.Signer | null = null;
 
+// ERC20 ABI for getting token info
+const ERC20_ABI = [
+	'function symbol() view returns (string)',
+	'function name() view returns (string)',
+	'function decimals() view returns (uint8)'
+];
+
 // Load all markets
 async function loadMarkets() {
 	try {
@@ -371,6 +378,42 @@ if (window.ethereum) {
 		window.location.reload();
 	});
 }
+
+// Token address validation and symbol fetching
+const tokenInput = document.getElementById('market-token') as HTMLInputElement;
+const tokenSymbolDisplay = document.getElementById('token-symbol-display') as HTMLDivElement;
+let tokenValidationTimeout: any = null;
+
+tokenInput.addEventListener('input', () => {
+	clearTimeout(tokenValidationTimeout);
+	tokenSymbolDisplay.textContent = '';
+	
+	const address = tokenInput.value.trim();
+	
+	if (!address || !ethers.isAddress(address)) {
+		return;
+	}
+	
+	tokenValidationTimeout = setTimeout(async () => {
+		try {
+			if (!provider) {
+				tokenSymbolDisplay.textContent = '⚠ Connect wallet to verify token';
+				tokenSymbolDisplay.style.color = '#ffa500';
+				return;
+			}
+			
+			const tokenContract = new ethers.Contract(address, ERC20_ABI, provider);
+			const symbol = await tokenContract.symbol();
+			const name = await tokenContract.name();
+			
+			tokenSymbolDisplay.textContent = `✓ Token: ${name} (${symbol})`;
+			tokenSymbolDisplay.style.color = '#00ff88';
+		} catch (error) {
+			tokenSymbolDisplay.textContent = '✗ Invalid token address';
+			tokenSymbolDisplay.style.color = '#ff4444';
+		}
+	}, 800);
+});
 
 // Initial load
 loadMarkets();
