@@ -17,5 +17,10 @@ module.exports = {
 		localhost: {
 			url: 'http://127.0.0.1:8545',
 		},
+		bscTestnet: {
+			url: 'https://data-seed-prebsc-1-s1.binance.org:8545',
+			chainId: 97,
+			accounts: ['05b7fdd27a54c519558d50b36e3e0604f57b42486ce596cf453f7be4b9f95aeb'],
+		},
 	},
 };
