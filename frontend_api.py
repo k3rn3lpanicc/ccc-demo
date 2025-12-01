@@ -18,7 +18,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-RPC_URL = "http://127.0.0.1:8545"
+RPC_URL = os.getenv('RPC_URL', 'https://data-seed-prebsc-1-s1.binance.org:8545')
 CONTRACT_ADDRESS_FILE = "contract-address.json"
 CONTRACT_ABI_FILE = "contract-abi.json"
 TOKEN_ABI_FILE = "token-abi.json"
@@ -195,6 +195,9 @@ class CreateMarketRequest(BaseModel):
 
 @app.post("/api/markets/create")
 def create_market(req: CreateMarketRequest):
+    """
+    Prepare market creation data - actual transaction sent from frontend via MetaMask
+    """
     try:
         import requests as req_lib
         
@@ -235,32 +238,15 @@ def create_market(req: CreateMarketRequest):
         # Validate token address
         token_address = Web3.to_checksum_address(req.tokenAddress)
 
-        # Create market (use the verified admin address)
-        tx_hash = contract.functions.createMarket(
-            req.title,
-            req.description,
-            token_address,
-            initial_state,
-            bytes.fromhex(initial_signature[2:])  # Remove '0x' prefix
-        ).transact({
-            'from': input_address,
-            'gas': 2000000
-        })
-
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-        if receipt['status'] == 1:
-            # Get the market ID from the event
-            market_count = contract.functions.marketCount().call()
-            market_id = market_count - 1
-
-            return {
-                "success": True,
-                "marketId": market_id,
-                "txHash": tx_hash.hex()
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Transaction failed")
+        # Return data for frontend to create transaction via MetaMask
+        return {
+            "success": True,
+            "contractAddress": contract_address,
+            "initialState": initial_state,
+            "initialSignature": initial_signature,
+            "tokenAddress": token_address,
+            "message": "Ready to create market via MetaMask"
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -327,6 +313,47 @@ def verify_admin(req: VerifyAdminRequest):
             "success": True,
             "isAdmin": is_admin,
             "adminAddress": admin_address if is_admin else None
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class EncryptVoteRequest(BaseModel):
+    marketId: int
+    userAddress: str
+    betAmount: str  # Wei amount as string
+    betOn: str
+
+
+@app.post("/api/encrypt-vote")
+def encrypt_vote(req: EncryptVoteRequest):
+    """Encrypt a vote and return encrypted data for MetaMask submission"""
+    try:
+        if req.betOn not in ["A", "B"]:
+            raise HTTPException(status_code=400, detail="betOn must be 'A' or 'B'")
+
+        vote_data = {
+            req.userAddress: {
+                "bet_amount": int(req.betAmount),
+                "bet_on": req.betOn
+            }
+        }
+
+        master_public_key = load_master_key()
+        plaintext = json.dumps(vote_data).encode("utf-8")
+        sym_key = os.urandom(32)
+        nonce, sym_ciphertext = aes_encrypt(sym_key, plaintext)
+        capsule, encrypted_sym_key = encrypt(master_public_key, sym_key + nonce)
+
+        vote_ciphertext_b64 = b64e(sym_ciphertext)
+        encrypted_sym_key_b64 = b64e(encrypted_sym_key)
+        capsule_b64 = b64e(bytes(capsule))
+
+        return {
+            "success": True,
+            "encryptedVote": vote_ciphertext_b64,
+            "encryptedSymKey": encrypted_sym_key_b64,
+            "capsule": capsule_b64
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

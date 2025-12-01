@@ -4,15 +4,20 @@ Listen for smart contract events and process votes through nodes/TEE
 import json
 import time
 import requests
+import os
 from web3 import Web3
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Configuration
 CONTRACT_ADDRESS_FILE = "contract-address.json"
 CONTRACT_ABI_FILE = "contract-abi.json"
-RPC_URL = "http://127.0.0.1:8545"
+RPC_URL = os.getenv('RPC_URL', 'https://data-seed-prebsc-1-s1.binance.org:8545')
 NODE_URL = "http://127.0.0.1:5000/submit_vote"
-POLL_INTERVAL = 2  # seconds
+POLL_INTERVAL = 5  # seconds (slower for public network)
 
 
 def load_contract():
@@ -116,23 +121,56 @@ def process_vote_event(event, contract, w3, market_histories):
 
             # Update contract state
             print("\n> Updating contract state...")
-
-            # Get the account that will send the transaction
-            # In production, this should be an authorized oracle account
-            accounts = w3.eth.accounts
-            if accounts:
-                # Convert signature to bytes
-                sig_bytes = bytes.fromhex(signature[2:] if signature.startswith('0x') else signature)
-                
-                tx_hash = contract.functions.updateState(market_id, new_state, sig_bytes).transact({
-                    'from': accounts[0]
-                })
-                receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-                print(
-                    f"✓ State updated in contract (tx: {receipt.transactionHash.hex()[:10]}...)")
-                print(f"✓ TEE signature verified on-chain")
+            
+            # Get admin private key from environment
+            admin_private_key = os.getenv('ADMIN_PRIVATE_KEY') or os.getenv('PRIVATE_KEY')
+            
+            if admin_private_key:
+                try:
+                    # Add 0x prefix if not present
+                    if not admin_private_key.startswith('0x'):
+                        admin_private_key = '0x' + admin_private_key
+                    
+                    # Get admin account
+                    admin_account = w3.eth.account.from_key(admin_private_key)
+                    admin_address = admin_account.address
+                    
+                    # Convert signature to bytes
+                    sig_bytes = bytes.fromhex(signature[2:] if signature.startswith('0x') else signature)
+                    
+                    # Build transaction
+                    nonce = w3.eth.get_transaction_count(admin_address)
+                    update_tx = contract.functions.updateState(market_id, new_state, sig_bytes).build_transaction({
+                        'from': admin_address,
+                        'gas': 500000,
+                        'gasPrice': w3.eth.gas_price,
+                        'nonce': nonce,
+                    })
+                    
+                    # Sign and send transaction
+                    signed_tx = w3.eth.account.sign_transaction(update_tx, admin_private_key)
+                    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+                    
+                    print(f"   Transaction sent: {tx_hash.hex()}")
+                    receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+                    
+                    if receipt['status'] == 1:
+                        print(f"✓ State updated in contract!")
+                        print(f"   Block: {receipt['blockNumber']}")
+                        print(f"   Gas used: {receipt['gasUsed']}")
+                        print(f"✓ TEE signature verified on-chain")
+                    else:
+                        print(f"✗ State update transaction failed")
+                        
+                except Exception as e:
+                    print(f"✗ Error updating state: {e}")
+                    print(f"   New state: {new_state[:50]}...")
+                    print(f"   Signature: {signature[:20]}...")
             else:
-                print("!!  No accounts available to update state")
+                print("⚠️  No ADMIN_PRIVATE_KEY or PRIVATE_KEY in .env")
+                print("   State update skipped (requires admin key and gas)")
+                print(f"   New state: {new_state[:50]}...")
+                print(f"   Signature: {signature[:20]}...")
 
         else:
             print(f"X Vote processing failed: {result.get('error')}")
@@ -150,16 +188,37 @@ def main():
     print("SMART CONTRACT EVENT LISTENER")
     print("="*60)
 
+    # Check for admin private key
+    admin_private_key = os.getenv('ADMIN_PRIVATE_KEY') or os.getenv('PRIVATE_KEY')
+    if admin_private_key:
+        if not admin_private_key.startswith('0x'):
+            admin_private_key = '0x' + admin_private_key
+        try:
+            admin_account = Web3().eth.account.from_key(admin_private_key)
+            print(f"✓ Admin key loaded: {admin_account.address}")
+            print(f"   Will automatically update contract state")
+        except:
+            print("✗ Invalid admin private key in .env")
+            print("   State updates will be skipped")
+            admin_private_key = None
+    else:
+        print("⚠️  No ADMIN_PRIVATE_KEY or PRIVATE_KEY in .env")
+        print("   State updates will be skipped")
+        print("   Add ADMIN_PRIVATE_KEY to .env for automatic state updates\n")
+
     # Connect to Ethereum node
     w3 = Web3(Web3.HTTPProvider(RPC_URL))
 
     if not w3.is_connected():
-        print("X Failed to connect to Ethereum node at", RPC_URL)
-        print("   Make sure Hardhat node is running: npx hardhat node")
+        print("X Failed to connect to network at", RPC_URL)
+        print("   Check your internet connection or try a different RPC")
         return
 
-    print(f"✓ Connected to Ethereum node")
+    print(f"✓ Connected to network")
     print(f"   Chain ID: {w3.eth.chain_id}")
+    chain_names = {1: "Ethereum", 56: "BSC", 97: "BSC Testnet", 137: "Polygon"}
+    chain_name = chain_names.get(w3.eth.chain_id, f"Chain {w3.eth.chain_id}")
+    print(f"   Network: {chain_name}")
     print(f"   Latest block: {w3.eth.block_number}")
 
     # Load contract
@@ -204,8 +263,8 @@ def main():
         while True:
             current_block = w3.eth.block_number
 
-            # Debug output every 10 seconds
-            if int(time.time()) % 10 == 0:
+            # Debug output every 30 seconds (less frequent for public network)
+            if int(time.time()) % 30 == 0:
                 print(
                     f"   Polling... (last: {last_block}, current: {current_block})")
 

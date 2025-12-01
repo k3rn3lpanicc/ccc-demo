@@ -1,4 +1,5 @@
 import './style.css';
+import { ethers } from 'ethers';
 
 const API_BASE = 'http://127.0.0.1:3001/api';
 
@@ -13,8 +14,17 @@ interface Market {
 	totalVolume: number;
 }
 
+// Ethereum types
+declare global {
+	interface Window {
+		ethereum?: any;
+	}
+}
+
 let isAdmin = false;
-let adminAddress = '';
+let userAddress: string | null = null;
+let provider: ethers.BrowserProvider | null = null;
+let signer: ethers.Signer | null = null;
 
 // Load all markets
 async function loadMarkets() {
@@ -89,7 +99,7 @@ function displayMarkets(markets: Market[]) {
 	});
 }
 
-// Handle create market form
+// Handle create market form with MetaMask
 document.getElementById('create-market-form')!.addEventListener('submit', async (e) => {
 	e.preventDefault();
 
@@ -99,17 +109,33 @@ document.getElementById('create-market-form')!.addEventListener('submit', async 
 	const resultDiv = document.getElementById('create-result')!;
 	const button = document.getElementById('create-market-button') as HTMLButtonElement;
 
-	if (!isAdmin || !adminAddress) {
-		resultDiv.textContent = '✗ Not authorized: Please login as admin';
+	if (!isAdmin || !userAddress) {
+		resultDiv.textContent = '✗ Not authorized: Admin only';
+		resultDiv.className = 'vote-result error show';
+		return;
+	}
+
+	if (!signer) {
+		resultDiv.textContent = '✗ Please connect MetaMask first';
 		resultDiv.className = 'vote-result error show';
 		return;
 	}
 
 	button.disabled = true;
-	resultDiv.textContent = 'Creating market...';
-	resultDiv.className = 'vote-result';
+	resultDiv.textContent = 'Checking network...';
+	resultDiv.className = 'vote-result loading show';
 
 	try {
+		// Step 0: Check if on BSC Testnet
+		const network = await provider!.getNetwork();
+		const chainId = Number(network.chainId);
+		
+		if (chainId !== 97) {
+			throw new Error(`Wrong network! Please switch to BSC Testnet (Chain ID: 97). Current: ${chainId}`);
+		}
+
+		// Step 1: Get initial state from backend
+		resultDiv.textContent = 'Preparing market data...';
 		const response = await fetch(`${API_BASE}/markets/create`, {
 			method: 'POST',
 			headers: {
@@ -119,15 +145,44 @@ document.getElementById('create-market-form')!.addEventListener('submit', async 
 				title, 
 				description,
 				tokenAddress,
-				adminAddress 
+				adminAddress: userAddress 
 			}),
 		});
 
 		const data = await response.json();
 
-		if (data.success) {
-			resultDiv.textContent = `✓ Market created successfully! (ID: ${data.marketId})`;
-			resultDiv.className = 'vote-result success';
+		if (!data.success) {
+			throw new Error(data.error || 'Failed to prepare market data');
+		}
+
+		// Step 2: Load contract ABI
+		resultDiv.textContent = 'Loading contract...';
+		const contractAbiResponse = await fetch('/contract-abi.json');
+		const contractAbi = await contractAbiResponse.json();
+
+		// Step 3: Create contract instance
+		const contract = new ethers.Contract(data.contractAddress, contractAbi, signer);
+
+		// Step 4: Send transaction via MetaMask
+		resultDiv.textContent = 'Sending transaction to blockchain...';
+		const tx = await contract.createMarket(
+			title,
+			description,
+			ethers.getAddress(data.tokenAddress),
+			data.initialState,
+			ethers.getBytes(data.initialSignature)
+		);
+
+		resultDiv.textContent = 'Waiting for confirmation...';
+		const receipt = await tx.wait();
+
+		if (receipt.status === 1) {
+			// Get market count to determine new market ID
+			const marketCount = await contract.marketCount();
+			const newMarketId = Number(marketCount) - 1;
+
+			resultDiv.textContent = `✓ Market created successfully! (ID: ${newMarketId})`;
+			resultDiv.className = 'vote-result success show';
 			
 			// Clear form
 			(document.getElementById('market-title') as HTMLInputElement).value = '';
@@ -138,140 +193,186 @@ document.getElementById('create-market-form')!.addEventListener('submit', async 
 			setTimeout(() => {
 				loadMarkets();
 				resultDiv.textContent = '';
+				resultDiv.className = 'vote-result';
 			}, 2000);
 		} else {
-			resultDiv.textContent = `✗ Failed: ${data.error || 'Unknown error'}`;
-			resultDiv.className = 'vote-result error';
+			throw new Error('Transaction failed');
 		}
-	} catch (error) {
-		resultDiv.textContent = `✗ Error: ${error}`;
-		resultDiv.className = 'vote-result error';
+	} catch (error: any) {
+		console.error('Create market error:', error);
+		resultDiv.className = 'vote-result error show';
+		
+		// Clean error message handling
+		let errorMessage = 'Failed to create market';
+		
+		if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+			errorMessage = 'Transaction cancelled by user';
+		} else if (error.message) {
+			if (error.message.includes('user rejected')) {
+				errorMessage = 'Transaction cancelled by user';
+			} else if (error.message.includes('insufficient funds')) {
+				errorMessage = 'Insufficient funds for gas';
+			} else if (error.message.includes('Wrong network')) {
+				errorMessage = error.message;
+			} else if (error.message.includes('Not authorized')) {
+				errorMessage = 'Not authorized: Admin only';
+			} else if (error.reason) {
+				errorMessage = error.reason;
+			} else if (error.message.length < 100) {
+				errorMessage = error.message;
+			} else {
+				errorMessage = 'Failed to create market. Check console for details';
+			}
+		}
+		
+		resultDiv.textContent = `✗ ${errorMessage}`;
 	} finally {
 		button.disabled = false;
 	}
 });
 
-// Check admin status on load
-async function checkAdminStatus() {
-	try {
-		const response = await fetch(`${API_BASE}/admin/status`);
-		const data = await response.json();
+// Update wallet button display
+function updateWalletButton(address: string) {
+	const connectBtn = document.getElementById('wallet-connect-btn') as HTMLButtonElement;
+	
+	connectBtn.innerHTML = `
+		<span class="wallet-icon">🦊</span>
+		<span class="wallet-text">${address.slice(0, 6)}...${address.slice(-4)}</span>
+	`;
+	
+	connectBtn.classList.add('connected');
+}
 
-		if (data.success && data.adminAddress) {
-			// Check if logged in as admin (from localStorage)
-			const savedAdmin = localStorage.getItem('adminAddress');
-			if (savedAdmin && savedAdmin.toLowerCase() === data.adminAddress.toLowerCase()) {
-				isAdmin = true;
-				adminAddress = savedAdmin;
-				updateUIForAdmin();
-			}
+// Connect wallet
+async function connectWallet() {
+	try {
+		if (!window.ethereum) {
+			alert('Please install MetaMask!');
+			return;
 		}
-	} catch (error) {
-		console.error('Failed to check admin status:', error);
+
+		provider = new ethers.BrowserProvider(window.ethereum);
+		
+		// Check network
+		const network = await provider.getNetwork();
+		const chainId = Number(network.chainId);
+		
+		if (chainId !== 97) {
+			alert(`Wrong network! Please switch MetaMask to BSC Testnet (Chain ID: 97).\n\nCurrent network: ${chainId}`);
+			return;
+		}
+
+		const accounts = await provider.send('eth_requestAccounts', []);
+		userAddress = accounts[0];
+		signer = await provider.getSigner();
+
+		// Update button
+		updateWalletButton(userAddress);
+
+		// Check if user is admin
+		await checkAdminStatus();
+	} catch (error: any) {
+		console.error('Failed to connect wallet:', error);
+		
+		let errorMessage = 'Failed to connect wallet';
+		
+		if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+			errorMessage = 'Connection cancelled by user';
+		} else if (error.message?.includes('user rejected')) {
+			errorMessage = 'Connection cancelled by user';
+		} else if (error.message?.includes('Wrong network')) {
+			return;
+		} else if (error.message && error.message.length < 80) {
+			errorMessage = error.message;
+		}
+		
+		alert(errorMessage);
 	}
 }
 
-function updateUIForAdmin() {
-	const loginBtn = document.getElementById('admin-login-btn')!;
+// Disconnect wallet
+function disconnectWallet() {
+	userAddress = null;
+	signer = null;
+	provider = null;
+	isAdmin = false;
+
+	const connectBtn = document.getElementById('wallet-connect-btn') as HTMLButtonElement;
 	const createSection = document.getElementById('create-market-section')!;
 
-	if (isAdmin) {
-		loginBtn.textContent = `Admin: ${adminAddress.slice(0, 6)}...${adminAddress.slice(-4)}`;
-		loginBtn.className = 'btn-success';
-		createSection.style.display = 'block';
-
-		// Add logout functionality
-		loginBtn.onclick = () => {
-			if (confirm('Logout from admin?')) {
-				localStorage.removeItem('adminAddress');
-				isAdmin = false;
-				adminAddress = '';
-				loginBtn.textContent = 'Admin Login';
-				loginBtn.className = 'btn-secondary';
-				createSection.style.display = 'none';
-				loginBtn.onclick = showLoginModal;
-			}
-		};
-	} else {
-		loginBtn.textContent = 'Admin Login';
-		loginBtn.className = 'btn-secondary';
-		createSection.style.display = 'none';
-		loginBtn.onclick = showLoginModal;
-	}
+	connectBtn.innerHTML = `
+		<span class="wallet-icon">🦊</span>
+		<span class="wallet-text">Connect Wallet</span>
+	`;
+	connectBtn.classList.remove('connected');
+	createSection.style.display = 'none';
 }
 
-// Admin login modal
-function showLoginModal() {
-	const modal = document.getElementById('admin-login-modal')!;
-	modal.classList.add('show');
-}
-
-document.getElementById('cancel-login')!.addEventListener('click', () => {
-	const modal = document.getElementById('admin-login-modal')!;
-	modal.classList.remove('show');
-});
-
-document.getElementById('confirm-login')!.addEventListener('click', async () => {
-	const addressInput = document.getElementById('admin-address') as HTMLInputElement;
-	const resultDiv = document.getElementById('login-result')!;
-	const confirmBtn = document.getElementById('confirm-login') as HTMLButtonElement;
-
-	const inputAddress = addressInput.value.trim();
-
-	if (!inputAddress || !inputAddress.startsWith('0x')) {
-		resultDiv.textContent = '✗ Invalid address format';
-		resultDiv.className = 'vote-result error show';
-		return;
-	}
-
-	confirmBtn.disabled = true;
-	resultDiv.textContent = 'Verifying...';
-	resultDiv.className = 'vote-result loading show';
-
+// Check if connected user is admin
+async function checkAdminStatus() {
+	if (!userAddress) return;
+	
 	try {
 		const response = await fetch(`${API_BASE}/admin/verify`, {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({ address: inputAddress }),
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ address: userAddress })
 		});
-
+		
 		const data = await response.json();
-
-		if (data.success && data.isAdmin) {
-			resultDiv.textContent = '✓ Admin verified!';
-			resultDiv.className = 'vote-result success show';
-			
-			// Save to localStorage
-			localStorage.setItem('adminAddress', inputAddress);
-			isAdmin = true;
-			adminAddress = inputAddress;
-
-			setTimeout(() => {
-				const modal = document.getElementById('admin-login-modal')!;
-				modal.classList.remove('show');
-				updateUIForAdmin();
-				resultDiv.textContent = '';
-				addressInput.value = '';
-			}, 1000);
-		} else {
-			resultDiv.textContent = '✗ Not an admin address';
-			resultDiv.className = 'vote-result error show';
-		}
+		isAdmin = data.success && data.isAdmin;
+		
+		// Show/hide create market section
+		const createSection = document.getElementById('create-market-section')!;
+		createSection.style.display = isAdmin ? 'block' : 'none';
 	} catch (error) {
-		resultDiv.textContent = `✗ Error: ${error}`;
-		resultDiv.className = 'vote-result error show';
-	} finally {
-		confirmBtn.disabled = false;
+		console.error('Failed to check admin status:', error);
+		isAdmin = false;
+	}
+}
+
+// Try to auto-reconnect if wallet was previously connected
+if (window.ethereum) {
+	window.ethereum.request({ method: 'eth_accounts' })
+		.then((accounts: string[]) => {
+			if (accounts.length > 0) {
+				connectWallet();
+			}
+		})
+		.catch((error: any) => {
+			console.log('Auto-reconnect not available');
+		});
+}
+
+// Setup wallet connection button
+const walletBtn = document.getElementById('wallet-connect-btn') as HTMLButtonElement;
+walletBtn.addEventListener('click', async () => {
+	if (userAddress) {
+		if (confirm('Disconnect wallet?')) {
+			disconnectWallet();
+		}
+	} else {
+		await connectWallet();
 	}
 });
 
-// Set initial click handler for admin button
-document.getElementById('admin-login-btn')!.onclick = showLoginModal;
+// Listen for account changes
+if (window.ethereum) {
+	window.ethereum.on('accountsChanged', (accounts: string[]) => {
+		if (accounts.length === 0) {
+			disconnectWallet();
+		} else {
+			connectWallet();
+		}
+	});
+	
+	// Listen for network changes
+	window.ethereum.on('chainChanged', () => {
+		window.location.reload();
+	});
+}
 
 // Initial load
-checkAdminStatus();
 loadMarkets();
 
 // Refresh markets every 10 seconds
