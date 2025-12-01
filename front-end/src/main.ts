@@ -674,7 +674,7 @@ async function handleFinishPrediction() {
 			for (let i = 0; i < payouts.length; i += BATCH_SIZE) {
 				const batchNum = Math.floor(i / BATCH_SIZE) + 1;
 				const batchAddresses = payouts.slice(i, i + BATCH_SIZE).map((p: any) => p.wallet);
-				const batchAmounts = payouts.slice(i, i + BATCH_SIZE).map((p: any) => Math.floor(p.payout));
+				const batchAmounts = payouts.slice(i, i + BATCH_SIZE).map((p: any) => BigInt(Math.floor(p.payout)));
 				const isLastBatch = (i + BATCH_SIZE) >= payouts.length;
 
 				resultDiv.textContent = `Step 3/3: Setting payouts batch ${batchNum}/${totalBatches} (confirm transaction)...`;
