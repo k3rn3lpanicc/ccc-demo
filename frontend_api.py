@@ -467,10 +467,14 @@ def submit_vote(vote: VoteRequest):
 
 class FinishRequest(BaseModel):
     marketId: int
+    adminAddress: str
 
 
 @app.post("/api/finish")
 def finish_betting(req: FinishRequest):
+    """
+    Prepare finish betting data - actual transaction sent from frontend via MetaMask
+    """
     try:
         w3 = Web3(Web3.HTTPProvider(RPC_URL))
         if not w3.is_connected():
@@ -488,24 +492,19 @@ def finish_betting(req: FinishRequest):
             abi=contract_abi
         )
 
-        accounts = w3.eth.accounts
-        admin = accounts[0]
+        # Verify admin
+        admin_address = contract.functions.admin().call()
+        input_address = Web3.to_checksum_address(req.adminAddress)
+        
+        if admin_address.lower() != input_address.lower():
+            raise HTTPException(status_code=403, detail="Not authorized: Only admin can finish betting")
 
-        tx_hash = contract.functions.finishBetting(req.marketId).transact({
-            'from': admin,
-            'gas': 1000000
-        })
-
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-        if receipt['status'] == 1:
-            return {
-                "success": True,
-                "txHash": tx_hash.hex(),
-                "blockNumber": receipt['blockNumber']
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Transaction failed")
+        # Return data for frontend to create transaction via MetaMask
+        return {
+            "success": True,
+            "contractAddress": contract_address,
+            "message": "Ready to finish betting via MetaMask"
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -568,7 +567,7 @@ def calculate_payouts(req: CalculatePayoutsRequest):
 
 class SetPayoutsRequest(BaseModel):
     marketId: int
-    payouts: list
+    signedTx: str
 
 
 @app.post("/api/set-payouts")
@@ -579,61 +578,15 @@ def set_payouts(req: SetPayoutsRequest):
             raise HTTPException(
                 status_code=500, detail="Cannot connect to Ethereum node")
 
-        with open(CONTRACT_ADDRESS_FILE, 'r') as f:
-            contract_address = json.load(f)['address']
+        tx_hash = w3.eth.send_raw_transaction(req.signedTx)
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 
-        with open(CONTRACT_ABI_FILE, 'r') as f:
-            contract_abi = json.load(f)
-
-        contract = w3.eth.contract(
-            address=Web3.to_checksum_address(contract_address),
-            abi=contract_abi
-        )
-
-        accounts = w3.eth.accounts
-        admin = accounts[0]
-
-        payouts = [p for p in req.payouts if p['payout'] > 0]
-
-        all_addresses = [payout['wallet'] for payout in payouts]
-        all_amounts = [int(payout['payout']) for payout in payouts]  # Convert to int
-
-        BATCH_SIZE = 20
-        total_batches = (len(all_addresses) + BATCH_SIZE - 1) // BATCH_SIZE
-
-        tx_hashes = []
-
-        for i in range(0, len(all_addresses), BATCH_SIZE):
-            batch_addresses = all_addresses[i:i + BATCH_SIZE]
-            batch_amounts = all_amounts[i:i + BATCH_SIZE]
-            is_last_batch = (i + BATCH_SIZE) >= len(all_addresses)
-
-            print(
-                f"Setting payouts batch {i//BATCH_SIZE + 1}/{total_batches} ({len(batch_addresses)} addresses)")
-
-            tx_hash = contract.functions.setPayouts(
-                req.marketId,
-                batch_addresses,
-                batch_amounts,
-                is_last_batch
-            ).transact({
-                'from': admin,
-                'gas': 10000000
-            })
-
-            receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-            if receipt['status'] != 1:
-                raise HTTPException(
-                    status_code=500, detail=f"Transaction failed in batch {i//BATCH_SIZE + 1}")
-
-            tx_hashes.append(tx_hash.hex())
+        if receipt['status'] != 1:
+            raise HTTPException(status_code=500, detail="Transaction failed")
 
         return {
             "success": True,
-            "txHashes": tx_hashes,
-            "batches": total_batches,
-            "totalPayouts": len(all_addresses)
+            "txHash": tx_hash.hex()
         }
 
     except Exception as e:

@@ -52,17 +52,22 @@ async function loadMarketDetails() {
 
 		if (data.success && data.market) {
 			currentMarket = data.market;
-			
+
 			// Update page with market info
 			document.getElementById('contract-address')!.textContent = `Market #${MARKET_ID}`;
-			document.getElementById('contract-balance')!.textContent = `${data.market.totalVolume.toFixed(2)} tokens`;
-			
+			document.getElementById(
+				'contract-balance'
+			)!.textContent = `${data.market.totalVolume.toFixed(2)} tokens`;
+
 			// Show token address
 			const tokenInfo = document.getElementById('token-info');
 			if (tokenInfo) {
-				tokenInfo.textContent = `Token: ${data.market.tokenAddress.slice(0, 10)}...${data.market.tokenAddress.slice(-8)}`;
+				tokenInfo.textContent = `Token: ${data.market.tokenAddress.slice(
+					0,
+					10
+				)}...${data.market.tokenAddress.slice(-8)}`;
 			}
-			
+
 			const statusText = data.market.bettingFinished ? '🔴 Finished' : '🟢 Active';
 			document.getElementById('betting-status')!.textContent = statusText;
 
@@ -96,13 +101,15 @@ async function connectWallet() {
 
 		// Request account access
 		provider = new ethers.BrowserProvider(window.ethereum);
-		
+
 		// Check network first
 		const network = await provider.getNetwork();
 		const chainId = Number(network.chainId);
-		
+
 		if (chainId !== 97) {
-			alert(`Wrong network! Please switch MetaMask to BSC Testnet (Chain ID: 97).\n\nCurrent network: ${chainId}`);
+			alert(
+				`Wrong network! Please switch MetaMask to BSC Testnet (Chain ID: 97).\n\nCurrent network: ${chainId}`
+			);
 			return;
 		}
 
@@ -111,11 +118,15 @@ async function connectWallet() {
 		signer = await provider.getSigner();
 
 		// Update button to show connected state
-		updateWalletButton(userAddress, null, null);
+		updateWalletButton(userAddress!, null, null);
 		enableVoteForm();
 
 		// Check if we have a market and token address
-		if (!currentMarket || !currentMarket.tokenAddress || currentMarket.tokenAddress === '0x0000000000000000000000000000000000000000') {
+		if (
+			!currentMarket ||
+			!currentMarket.tokenAddress ||
+			currentMarket.tokenAddress === '0x0000000000000000000000000000000000000000'
+		) {
 			// No token yet, just show connected
 			await checkAdminStatus();
 			return;
@@ -125,7 +136,7 @@ async function connectWallet() {
 		try {
 			const tokenAbiResponse = await fetch('/token-abi.json');
 			const tokenAbi = await tokenAbiResponse.json();
-			
+
 			const tokenContract = new ethers.Contract(
 				currentMarket.tokenAddress,
 				tokenAbi,
@@ -137,26 +148,26 @@ async function connectWallet() {
 			userBalance = ethers.formatEther(balance);
 
 			// Update button with balance
-			updateWalletButton(userAddress, parseFloat(userBalance).toFixed(2), symbol);
+			updateWalletButton(userAddress!, parseFloat(userBalance).toFixed(2), symbol);
 			enableVoteForm();
-			
+
 			// Check if user is admin
 			await checkAdminStatus();
 		} catch (tokenError) {
 			console.error('Token error:', tokenError);
 			// Still show connected even if token check fails
-			updateWalletButton(userAddress, null, null);
+			updateWalletButton(userAddress!, null, null);
 			enableVoteForm();
-			
+
 			// Check if user is admin
 			await checkAdminStatus();
 		}
 	} catch (error: any) {
 		console.error('Failed to connect wallet:', error);
-		
+
 		// Clean error message handling
 		let errorMessage = 'Failed to connect wallet';
-		
+
 		if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
 			errorMessage = 'Connection cancelled by user';
 		} else if (error.message) {
@@ -171,7 +182,7 @@ async function connectWallet() {
 				errorMessage = 'Connection failed. Please try again';
 			}
 		}
-		
+
 		alert(errorMessage);
 	}
 }
@@ -179,7 +190,7 @@ async function connectWallet() {
 // Update wallet button display
 function updateWalletButton(address: string, balance: string | null, symbol: string | null) {
 	const connectBtn = document.getElementById('wallet-connect-btn') as HTMLButtonElement;
-	
+
 	if (balance && symbol) {
 		// Show address and balance
 		connectBtn.innerHTML = `
@@ -196,7 +207,7 @@ function updateWalletButton(address: string, balance: string | null, symbol: str
 			<span class="wallet-text">${address.slice(0, 6)}...${address.slice(-4)}</span>
 		`;
 	}
-	
+
 	connectBtn.classList.add('connected');
 }
 
@@ -206,12 +217,12 @@ function enableVoteForm() {
 	const betAmount = document.getElementById('bet-amount') as HTMLInputElement;
 	const voteButton = document.getElementById('vote-button') as HTMLButtonElement;
 	const radioOptions = document.querySelectorAll('input[name="vote-option"]');
-	
+
 	walletPrompt.style.display = 'none';
 	betAmount.disabled = false;
 	voteButton.disabled = false;
 	voteButton.textContent = 'Submit Vote';
-	radioOptions.forEach((radio: any) => radio.disabled = false);
+	radioOptions.forEach((radio: any) => (radio.disabled = false));
 }
 
 // Disable vote form when wallet disconnected
@@ -220,12 +231,12 @@ function disableVoteForm() {
 	const betAmount = document.getElementById('bet-amount') as HTMLInputElement;
 	const voteButton = document.getElementById('vote-button') as HTMLButtonElement;
 	const radioOptions = document.querySelectorAll('input[name="vote-option"]');
-	
+
 	walletPrompt.style.display = 'block';
 	betAmount.disabled = true;
 	voteButton.disabled = true;
 	voteButton.textContent = 'Connect Wallet to Vote';
-	radioOptions.forEach((radio: any) => radio.disabled = true);
+	radioOptions.forEach((radio: any) => (radio.disabled = true));
 }
 
 // Disconnect wallet
@@ -250,14 +261,14 @@ function disconnectWallet() {
 // Check if connected user is admin
 async function checkAdminStatus() {
 	if (!userAddress) return;
-	
+
 	try {
 		const response = await fetch(`${API_BASE}/admin/verify`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ address: userAddress })
+			body: JSON.stringify({ address: userAddress }),
 		});
-		
+
 		const data = await response.json();
 		isAdmin = data.success && data.isAdmin;
 		updateFinishButtonVisibility();
@@ -403,7 +414,7 @@ async function loadChart() {
 									label: function (context) {
 										const index = context.dataIndex;
 										const datasetLabel = context.dataset.label;
-										return `${datasetLabel}: ${context.parsed.y.toFixed(2)}%`;
+										return `${datasetLabel}: ${context.parsed.y!.toFixed(2)}%`;
 									},
 									afterLabel: function (context) {
 										const index = context.dataIndex;
@@ -437,7 +448,8 @@ async function handleVoteSubmit(event: Event) {
 	}
 
 	const betAmount = parseFloat((document.getElementById('bet-amount') as HTMLInputElement).value);
-	const betOn = (document.querySelector('input[name="vote-option"]:checked') as HTMLInputElement).value;
+	const betOn = (document.querySelector('input[name="vote-option"]:checked') as HTMLInputElement)
+		.value;
 
 	const submitButton = document.getElementById('vote-button') as HTMLButtonElement;
 	const resultDiv = document.getElementById('vote-result')!;
@@ -452,9 +464,11 @@ async function handleVoteSubmit(event: Event) {
 		// Check if on BSC Testnet
 		const network = await provider!.getNetwork();
 		const chainId = Number(network.chainId);
-		
+
 		if (chainId !== 97) {
-			throw new Error(`Wrong network! Please switch MetaMask to BSC Testnet (Chain ID: 97).\n\nCurrent network: ${chainId}`);
+			throw new Error(
+				`Wrong network! Please switch MetaMask to BSC Testnet (Chain ID: 97).\n\nCurrent network: ${chainId}`
+			);
 		}
 
 		resultDiv.textContent = 'Preparing transaction...';
@@ -462,7 +476,7 @@ async function handleVoteSubmit(event: Event) {
 		// Load contract ABIs
 		const contractAbiResponse = await fetch('/contract-abi.json');
 		const contractAbi = await contractAbiResponse.json();
-		
+
 		const tokenAbiResponse = await fetch('/token-abi.json');
 		const tokenAbi = await tokenAbiResponse.json();
 
@@ -486,8 +500,8 @@ async function handleVoteSubmit(event: Event) {
 				marketId: MARKET_ID,
 				userAddress,
 				betAmount: betAmountWei.toString(),
-				betOn
-			})
+				betOn,
+			}),
 		});
 
 		const encryptData = await encryptResponse.json();
@@ -526,14 +540,13 @@ async function handleVoteSubmit(event: Event) {
 			loadChart();
 			connectWallet(); // Refresh balance
 		}, 3000);
-
 	} catch (error: any) {
 		console.error('Vote submission error:', error);
 		resultDiv.className = 'vote-result error show';
-		
+
 		// Clean error message handling
 		let errorMessage = 'Transaction failed';
-		
+
 		if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
 			errorMessage = 'Transaction cancelled by user';
 		} else if (error.message) {
@@ -555,7 +568,7 @@ async function handleVoteSubmit(event: Event) {
 				errorMessage = 'Transaction failed. Check console for details';
 			}
 		}
-		
+
 		resultDiv.textContent = `✗ ${errorMessage}`;
 	} finally {
 		submitButton.disabled = false;
@@ -565,6 +578,11 @@ async function handleVoteSubmit(event: Event) {
 
 // Handle finish prediction
 async function handleFinishPrediction() {
+	if (!signer || !userAddress || !currentMarket) {
+		alert('Please connect your wallet first!');
+		return;
+	}
+
 	const modal = document.getElementById('finish-modal')!;
 	const resultDiv = document.getElementById('finish-result')!;
 	const confirmButton = document.getElementById('confirm-finish') as HTMLButtonElement;
@@ -592,20 +610,45 @@ async function handleFinishPrediction() {
 		confirmButton.disabled = true;
 		cancelButton.disabled = true;
 		resultDiv.className = 'vote-result loading show';
-		resultDiv.textContent = 'Step 1/3: Finishing betting...';
+		resultDiv.textContent = 'Checking network...';
 
 		try {
-			// Step 1: Finish betting
+			// Check if on BSC Testnet
+			const network = await provider!.getNetwork();
+			const chainId = Number(network.chainId);
+
+			if (chainId !== 97) {
+				throw new Error(
+					`Wrong network! Please switch MetaMask to BSC Testnet (Chain ID: 97).\n\nCurrent network: ${chainId}`
+				);
+			}
+
+			resultDiv.textContent = 'Step 1/3: Preparing finish betting...';
+
+			// Load contract ABI
+			const contractAbiResponse = await fetch('/contract-abi.json');
+			const contractAbi = await contractAbiResponse.json();
+
+			// Step 1: Finish betting via API (to verify admin)
 			const finishResponse = await fetch(`${API_BASE}/finish`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ marketId: MARKET_ID }),
+				body: JSON.stringify({ marketId: MARKET_ID, adminAddress: userAddress }),
 			});
 
 			const finishData = await finishResponse.json();
 			if (!finishData.success) {
-				throw new Error(finishData.detail || 'Failed to finish betting');
+				throw new Error(finishData.detail || 'Failed to prepare finish betting');
 			}
+
+			resultDiv.textContent = 'Step 1/3: Finishing betting (confirm transaction)...';
+
+			// Send transaction via MetaMask
+			const contract = new ethers.Contract(finishData.contractAddress, contractAbi, signer);
+			const tx = await contract.finishBetting(MARKET_ID);
+
+			resultDiv.textContent = 'Step 1/3: Waiting for transaction confirmation...';
+			await tx.wait();
 
 			resultDiv.textContent = 'Step 2/3: Calculating payouts...';
 
@@ -621,18 +664,25 @@ async function handleFinishPrediction() {
 				throw new Error(payoutsData.detail || 'Failed to calculate payouts');
 			}
 
-			resultDiv.textContent = 'Step 3/3: Setting payouts in contract...';
+			resultDiv.textContent = 'Step 3/3: Setting payouts in contract (confirm transaction)...';
 
-			// Step 3: Set payouts
-			const setPayoutsResponse = await fetch(`${API_BASE}/set-payouts`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ marketId: MARKET_ID, payouts: payoutsData.payouts }),
-			});
+			// Step 3: Set payouts - batch them
+			const payouts = payoutsData.payouts.filter((p: any) => p.payout > 0);
+			const BATCH_SIZE = 20;
+			const totalBatches = Math.ceil(payouts.length / BATCH_SIZE);
 
-			const setPayoutsData = await setPayoutsResponse.json();
-			if (!setPayoutsData.success) {
-				throw new Error(setPayoutsData.detail || 'Failed to set payouts');
+			for (let i = 0; i < payouts.length; i += BATCH_SIZE) {
+				const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+				const batchAddresses = payouts.slice(i, i + BATCH_SIZE).map((p: any) => p.wallet);
+				const batchAmounts = payouts.slice(i, i + BATCH_SIZE).map((p: any) => Math.floor(p.payout));
+				const isLastBatch = (i + BATCH_SIZE) >= payouts.length;
+
+				resultDiv.textContent = `Step 3/3: Setting payouts batch ${batchNum}/${totalBatches} (confirm transaction)...`;
+
+				const tx = await contract.setPayouts(MARKET_ID, batchAddresses, batchAmounts, isLastBatch);
+
+				resultDiv.textContent = `Step 3/3: Waiting for batch ${batchNum}/${totalBatches} confirmation...`;
+				await tx.wait();
 			}
 
 			resultDiv.className = 'vote-result success show';
@@ -647,17 +697,18 @@ async function handleFinishPrediction() {
 			// Reload data
 			setTimeout(() => {
 				modal.classList.remove('show');
-				loadContractStatus();
+				loadMarketDetails();
+				loadChart();
 				finishButton.disabled = true;
 				finishButton.textContent = 'Prediction Finished';
 			}, 3000);
 		} catch (error: any) {
 			console.error('Finish prediction error:', error);
 			resultDiv.className = 'vote-result error show';
-			
+
 			// Clean error message handling
 			let errorMessage = 'Failed to finish prediction';
-			
+
 			if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
 				errorMessage = 'Transaction cancelled by user';
 			} else if (error.message) {
@@ -667,13 +718,15 @@ async function handleFinishPrediction() {
 					errorMessage = 'Not authorized: Admin only';
 				} else if (error.message.includes('already finished')) {
 					errorMessage = 'Betting already finished';
+				} else if (error.message.includes('Wrong network')) {
+					errorMessage = error.message;
 				} else if (error.message.length < 100) {
 					errorMessage = error.message;
 				} else {
 					errorMessage = 'Operation failed. Check console for details';
 				}
 			}
-			
+
 			resultDiv.textContent = `✗ ${errorMessage}`;
 			confirmButton.disabled = false;
 			cancelButton.disabled = false;
@@ -693,12 +746,13 @@ async function init() {
 	backButton.href = '/markets.html';
 	backButton.className = 'back-button';
 	backButton.innerHTML = '← Back to Markets';
-	backButton.style.cssText = 'display: block; margin-bottom: 10px; color: var(--color-primary); text-decoration: none;';
+	backButton.style.cssText =
+		'display: block; margin-bottom: 10px; color: var(--color-primary); text-decoration: none;';
 	header.insertBefore(backButton, header.firstChild);
 
 	await loadMarketDetails();
 	await loadChart();
-	
+
 	// Initially hide finish button (will show if admin)
 	updateFinishButtonVisibility();
 
@@ -736,7 +790,7 @@ async function init() {
 				connectWallet();
 			}
 		});
-		
+
 		// Listen for network changes
 		window.ethereum.on('chainChanged', () => {
 			window.location.reload();
